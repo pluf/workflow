@@ -1,0 +1,18 @@
+{
+	"name" : "pluf/workflow",
+	"description" : "Fast workflow manager.",
+	"type" : "library",
+	"license" : "MIT",
+	"authors" : [{
+			"name" : "Mostafa Barmshory",
+			"email" : "mostafa.barmshory@dpq.co.ir"
+		}
+	],
+	"minimum-stability" : "stable",
+	"require" : {
+		"pluf/core" : "^2.0.2"
+	},
+	"include-path" : [
+		"src/"
+	]
+}
