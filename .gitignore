@@ -1,0 +1,16 @@
+# Eclipse
+.project
+.settings
+/.buildpath
+
+# Composer
+/vendor/
+composer.lock
+composer-setup.php
+composer.phar
+
+# Project
+storage/tenant
+
+# KDE
+.directory
