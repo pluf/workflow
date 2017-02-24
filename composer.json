@@ -5,7 +5,9 @@
 	"license" : "MIT",
 	"authors" : [{
 			"name" : "Mostafa Barmshory",
-			"email" : "mostafa.barmshory@dpq.co.ir"
+			"email" : "mostafa.barmshory@dpq.co.ir",
+			"homepage" : "http://dpq.co.ir",
+			"role" : "developer"
 		}
 	],
 	"minimum-stability" : "stable",
@@ -26,5 +28,12 @@
 		"psr-0" : {
 			"test" : ""
 		}
-	}
+	},
+	"support" : {
+		"email" : "info@pluf.ir",
+		"issues" : "https://github.com/pluf/workflow/issues",
+		"wiki" : "https://github.com/pluf/workflow/wiki",
+		"source" : "https://github.com/pluf/workflow"
+	},
+	"homepage" : "http://pluf.ir"
 }
