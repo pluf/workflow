@@ -14,8 +14,10 @@ class ApiTest extends TestCase
 
     /**
      * Can create new instance
+     * 
+     * @test
      */
-    public function testInstance ()
+    public function instance ()
     {
         $wm = new Workflow_Machine();
         $this->assertTrue(isset($wm));
@@ -23,8 +25,10 @@ class ApiTest extends TestCase
 
     /**
      * Check class api
+     * 
+     * @test
      */
-    public function testMethods ()
+    public function methods ()
     {
         $object = new Workflow_Machine();
         $method_names = array(
