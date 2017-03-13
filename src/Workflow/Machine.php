@@ -41,11 +41,11 @@ class Workflow_Machine
     {
         $stateName = $object->state;
         if (empty($stateName)) {
-            $stateName = Pluf_StateMachine::STATE_UNDEFINED;
+            $stateName = Workflow_Machine::STATE_UNDEFINED;
             $state = null;
-            if (array_key_exists(Pluf_StateMachine::STATE_UNDEFINED, 
+            if (array_key_exists(Workflow_Machine::STATE_UNDEFINED, 
                     $this->states)) {
-                $transaction = $this->states[Pluf_StateMachine::STATE_UNDEFINED];
+                $transaction = $this->states[Workflow_Machine::STATE_UNDEFINED];
             } else {
                 throw new Pluf_Exception(sprintf("Unknown state!", $stateName));
             }
@@ -56,8 +56,8 @@ class Workflow_Machine
         }
         $this->checkPreconditions($request, $object, $action, $transaction);
         // Run the transaction
-        if (array_key_exists(Pluf_StateMachine::KEY_ACTION, $transaction)) {
-            call_user_func_array($transaction[Pluf_StateMachine::KEY_ACTION], 
+        if (array_key_exists(Workflow_Machine::KEY_ACTION, $transaction)) {
+            call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], 
                     array(
                             $request,
                             $object,
@@ -69,9 +69,9 @@ class Workflow_Machine
         $object->update();
         
         // Send signals
-        $event = new Pluf_StateMachine_Event($request, $object, $action, $state, 
+        $event = new Workflow_Event($request, $object, $action, $state, 
                 $transaction);
-        Pluf_Signal::send('DigiDoci_Request::stateChange', 'Pluf_StateMachine', 
+        Pluf_Signal::send('DigiDoci_Request::stateChange', 'Workflow_Machine', 
                 $event);
         return $this;
     }
