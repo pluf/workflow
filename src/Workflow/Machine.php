@@ -71,8 +71,10 @@ class Workflow_Machine
         // Send signals
         $event = new Workflow_Event($request, $object, $action, $state, 
                 $transaction);
-        Pluf_Signal::send('DigiDoci_Request::stateChange', 'Workflow_Machine', 
-                $event);
+        foreach ($this->signals as $signal){
+            Pluf_Signal::send($signal, 'Workflow_Machine', 
+                    $event);
+        }
         return $this;
     }
 
