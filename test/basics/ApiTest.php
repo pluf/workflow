@@ -14,7 +14,7 @@ class ApiTest extends TestCase
 
     /**
      * Can create new instance
-     * 
+     *
      * @test
      */
     public function instance ()
@@ -25,7 +25,7 @@ class ApiTest extends TestCase
 
     /**
      * Check class api
-     * 
+     *
      * @test
      */
     public function methods ()
@@ -33,13 +33,17 @@ class ApiTest extends TestCase
         $object = new Workflow_Machine();
         $method_names = array(
                 'transact',
+                
                 'setStates',
                 'setSignals',
                 'setInitialState',
-                'setProperty'
+                'setProperty',
+                
+                'apply',
+                'can'
         );
         foreach ($method_names as $method_name) {
-            $this->assertTrue(method_exists ($object , $method_name ));
+            $this->assertTrue(method_exists($object, $method_name));
         }
     }
 }
