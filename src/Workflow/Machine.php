@@ -18,6 +18,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+// XXX: maso, handle otherwise states
+// XXX: maso, handle undefined state
+// TODO: maos, 2017: $request are store in global vars. remove from params
 /**
  * State machine system.
  *
@@ -34,10 +37,61 @@ class Workflow_Machine
     const STATE_UNDEFINED = '#';
 
     var $states = null;
+
+    /**
+     * Name of state property
+     *
+     * This is a field name where state is stored in.
+     *
+     * @var string
+     */
+    var $statePropertyName = null;
+
+    var $signals = array();
     
-    // XXX: maso, handle otherwise states
-    // XXX: maso, handle undefined state
+    /**
+     * Perform action on object
+     *
+     * @deprecated use Workflow_Machine::apply($object, $action)
+     * @param unknown $request            
+     * @param unknown $object            
+     * @param unknown $action            
+     * @throws Pluf_Exception
+     * @return Workflow_Machine
+     */
     public function transact ($request, $object, $action)
+    {
+        return $this->apply($object, $action);
+    }
+
+    /**
+     * Send signals
+     *
+     * @param Pluf_Model $object            
+     * @param string $action            
+     * @param unknown $state            
+     * @param unknown $transaction            
+     */
+    private function sendSignals ($object, $action, $state, $transaction)
+    {
+        if (! isset($this->signals) && ! is_array($this->signals)) {
+            return;
+        }
+        $event = new Workflow_Event($GLOBALS['_PX_request'], $object, $action, 
+                $state, $transaction);
+        foreach ($this->signals as $signal) {
+            Pluf_Signal::send($signal, 'Workflow_Machine', $event);
+        }
+    }
+
+    /**
+     * Applies action on the object
+     *
+     * @param Pluf_Model $object            
+     * @param string $action            
+     * @return Workflow_Machine
+     */
+    public function apply ($object, $action)
     {
         $stateName = $object->state;
         if (empty($stateName)) {
@@ -54,12 +108,12 @@ class Workflow_Machine
             $state['name'] = $object->state;
             $transaction = $this->getTransaction($state, $action);
         }
-        $this->checkPreconditions($request, $object, $action, $transaction);
+        $this->checkPreconditions($object, $action, $transaction);
         // Run the transaction
         if (array_key_exists(Workflow_Machine::KEY_ACTION, $transaction)) {
             call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], 
                     array(
-                            $request,
+                            $GLOBALS['_PX_request'],
                             $object,
                             $action
                     ));
@@ -69,13 +123,20 @@ class Workflow_Machine
         $object->update();
         
         // Send signals
-        $event = new Workflow_Event($request, $object, $action, $state, 
-                $transaction);
-        foreach ($this->signals as $signal){
-            Pluf_Signal::send($signal, 'Workflow_Machine', 
-                    $event);
-        }
+        $this->sendSignals($object, $action, $state, $transaction);
         return $this;
+    }
+
+    /**
+     * Check if it is possible to perform action
+     *
+     * @param Pluf_Model $object            
+     * @param string $action            
+     * @return boolean true if it is possible to apply action.
+     */
+    public function can ($object, $action)
+    {
+        return false;
     }
 
     /*
@@ -105,8 +166,7 @@ class Workflow_Machine
         return $state[$action];
     }
 
-    private function checkPreconditions ($request, $object, $action, 
-            $transaction)
+    private function checkPreconditions ($object, $action, $transaction)
     {
         // check all preconditions
         $preconds = array();
@@ -116,7 +176,7 @@ class Workflow_Machine
         foreach ($preconds as $precond) {
             call_user_func_array(explode('::', $precond), 
                     array(
-                            $request,
+                            $GLOBALS['_PX_request'],
                             $object,
                             $action
                     ));

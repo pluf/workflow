@@ -54,6 +54,7 @@ class TurnstileTest extends TestCase
      */
     public static function setPlfu ()
     {
+        $GLOBALS['_PX_request'] = array();
         require_once 'Pluf.php';
     }
 
