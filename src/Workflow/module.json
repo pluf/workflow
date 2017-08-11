@@ -1,8 +1,5 @@
 {
-	"model": [
-		"Todo_Item",
-		"Todo_List"
-	],
+	"model": [],
 	"permisson": [],
 	"monitor":[]
 }
