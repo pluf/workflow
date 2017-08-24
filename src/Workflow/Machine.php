@@ -111,7 +111,7 @@ class Workflow_Machine
         $this->checkPreconditions($object, $action, $transaction);
         // Run the transaction
         if (array_key_exists(Workflow_Machine::KEY_ACTION, $transaction)) {
-            call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], 
+            return call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], 
                     array(
                             $GLOBALS['_PX_request'],
                             $object,
