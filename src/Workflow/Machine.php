@@ -74,7 +74,7 @@ class Workflow_Machine
      */
     private function sendSignals ($object, $action, $state, $transaction)
     {
-        if (! isset($this->signals) && ! is_array($this->signals)) {
+        if (! isset($this->signals) || ! is_array($this->signals)) {
             return;
         }
         $event = new Workflow_Event($GLOBALS['_PX_request'], $object, $action, 
@@ -110,8 +110,9 @@ class Workflow_Machine
         }
         $this->checkPreconditions($object, $action, $transaction);
         // Run the transaction
+        $result = true;
         if (array_key_exists(Workflow_Machine::KEY_ACTION, $transaction)) {
-            return call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], 
+            $result = call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], 
                     array(
                             $GLOBALS['_PX_request'],
                             $object,
@@ -124,7 +125,7 @@ class Workflow_Machine
         
         // Send signals
         $this->sendSignals($object, $action, $state, $transaction);
-        return $this;
+        return $result;
     }
 
     /**
@@ -189,6 +190,12 @@ class Workflow_Machine
         return $this;
     }
 
+    /**
+     * Sets list of signals
+     * 
+     * @param array $signals
+     * @return Workflow_Machine
+     */
     public function setSignals ($signals)
     {
         $this->signals = $signals;
