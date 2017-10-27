@@ -69,7 +69,7 @@ class TurnstileTest extends TestCase
         
         // Machine
         $states = array(
-                Pluf_StateMachine::STATE_UNDEFINED => array(
+                Workflow_Machine::STATE_UNDEFINED => array(
                         'next' => 'Locked'
                 ),
                 // State

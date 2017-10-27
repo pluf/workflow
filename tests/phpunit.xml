@@ -3,9 +3,18 @@
     <testsuites>
         <testsuite name="Application Test Suite">
             <directory>./basics/</directory>
-        </testsuite>
-        <testsuite name="Application Test Suite">
             <directory>./examples/</directory>
         </testsuite>
     </testsuites>
+    
+    
+    
+    <filter>
+        <whitelist addUncoveredFilesFromWhitelist="true">
+            <directory suffix=".php">../src</directory>
+        </whitelist>
+    </filter>
+    <logging>
+        <log type="coverage-clover" target="./clover.xml"/>
+    </logging>
 </phpunit>

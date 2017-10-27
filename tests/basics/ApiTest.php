@@ -19,8 +19,17 @@ class ApiTest extends TestCase
      */
     public function instance ()
     {
+        // Machine
         $wm = new Workflow_Machine();
         $this->assertTrue(isset($wm));
+        // Event
+        $request = null;
+        $object = null;
+        $action = null;
+        $state = null;
+        $transaction = null;
+        $event = new Workflow_Event($request, $object, $action, $state, $transaction);
+        $this->assertTrue(isset($event));
     }
 
     /**
