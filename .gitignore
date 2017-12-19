@@ -14,3 +14,4 @@ storage/tenant
 
 # KDE
 .directory
+/build/
