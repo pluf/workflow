@@ -2,18 +2,18 @@
 <phpunit colors="true">
     <testsuites>
         <testsuite name="Application Test Suite">
-            <directory>./basics/</directory>
-            <directory>./examples/</directory>
+            <directory>tests/basics/</directory>
+            <directory>tests/examples/</directory>
         </testsuite>
     </testsuites>
 
 	<!-- Code coverage -->
 	<filter>
 		<whitelist addUncoveredFilesFromWhitelist="true">
-			<directory suffix=".php">../src</directory>
+			<directory suffix=".php">src</directory>
 		</whitelist>
 	</filter>
 	<logging>
-		<log type="coverage-clover" target="./clover.xml" />
+        <log type="coverage-clover" target="build/logs/clover.xml"/>
 	</logging>
 </phpunit>
