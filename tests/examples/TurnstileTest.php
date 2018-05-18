@@ -76,7 +76,18 @@ class TurnstileTest extends TestCase
                 'Locked' => array(
                         // Transaction or event
                         'coin' => array(
-                                'next' => 'Unlocked'
+                            'next' => 'Unlocked',
+//                             'action' => array(
+//                                 'Spa_SPA_Manager_Simple',
+//                                 'checkUpdate'
+//                             ),
+//                             'preconditions' => array(
+//                                 'User_Precondition::isOwner'
+//                             ),
+                            //  client side
+                                'title' => '',
+                                'description' => '',
+                                'properties' => array()
                         ),
                         'push' => array(
                                 'next' => 'Locked'
