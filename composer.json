@@ -12,7 +12,7 @@
 	],
 	"minimum-stability" : "stable",
 	"require" : {
-		"pluf/core" : "5.3.x"
+		"pluf/core" : "5.4.x"
 	},
 	"require-dev" : {
 		"phpunit/phpunit" : "5.7.14"
