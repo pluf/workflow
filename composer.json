@@ -12,10 +12,10 @@
 	],
 	"minimum-stability" : "stable",
 	"require" : {
-		"pluf/core" : "5.10.x"
+		"pluf/core" : "5.11.x"
 	},
 	"require-dev" : {
-		"pluf/test" : "5.10.x"
+		"pluf/test" : "5.11.x"
 	},
 	"include-path" : [
 		"src/"
