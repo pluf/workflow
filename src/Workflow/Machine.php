@@ -41,11 +41,11 @@ class Workflow_Machine
     /**
      * Name of state property
      *
-     * This is a field name where state is stored in.
+     * This is a field name where state is stored in. Default is 'state'.
      *
      * @var string
      */
-    var $statePropertyName = null;
+    var $statePropertyName = 'state';
 
     var $signals = array();
     
@@ -93,7 +93,7 @@ class Workflow_Machine
      */
     public function apply ($object, $action)
     {
-        $stateName = $object->state;
+        $stateName = $object->{$this->statePropertyName};
         if (empty($stateName)) {
             $stateName = Workflow_Machine::STATE_UNDEFINED;
             $state = null;
@@ -105,7 +105,7 @@ class Workflow_Machine
             }
         } else {
             $state = $this->getState($object);
-            $state['name'] = $object->state;
+            $state['name'] = $object->{$this->statePropertyName};
             $transaction = $this->getTransaction($state, $action);
         }
         $this->checkPreconditions($object, $action, $transaction);
@@ -120,7 +120,7 @@ class Workflow_Machine
                     ));
         }
         // Update state
-        $object->state = $transaction['next'];
+        $object->{$this->statePropertyName} = $transaction['next'];
         $object->update();
         
         // Send signals
@@ -145,7 +145,7 @@ class Workflow_Machine
      */
     private function getState ($object)
     {
-        $stateName = $object->state;
+        $stateName = $object->{$this->statePropertyName};
         // check state
         if (! array_key_exists($stateName, $this->states)) {
             // throw invalid state
