@@ -41,25 +41,25 @@ class Workflow_Machine
     /**
      * Name of state property
      *
-     * This is a field name where state is stored in.
+     * This is a field name where state is stored in. Default is 'state'.
      *
      * @var string
      */
-    var $statePropertyName = null;
+    var $statePropertyName = 'state';
 
     var $signals = array();
-    
+
     /**
      * Perform action on object
      *
      * @deprecated use Workflow_Machine::apply($object, $action)
-     * @param unknown $request            
-     * @param unknown $object            
-     * @param unknown $action            
+     * @param unknown $request
+     * @param unknown $object
+     * @param unknown $action
      * @throws Pluf_Exception
      * @return Workflow_Machine
      */
-    public function transact ($request, $object, $action)
+    public function transact($request, $object, $action)
     {
         return $this->apply($object, $action);
     }
@@ -67,18 +67,17 @@ class Workflow_Machine
     /**
      * Send signals
      *
-     * @param Pluf_Model $object            
-     * @param string $action            
-     * @param unknown $state            
-     * @param unknown $transaction            
+     * @param Pluf_Model $object
+     * @param string $action
+     * @param unknown $state
+     * @param unknown $transaction
      */
-    private function sendSignals ($object, $action, $state, $transaction)
+    private function sendSignals($object, $action, $state, $transaction)
     {
         if (! isset($this->signals) || ! is_array($this->signals)) {
             return;
         }
-        $event = new Workflow_Event($GLOBALS['_PX_request'], $object, $action, 
-                $state, $transaction);
+        $event = new Workflow_Event($GLOBALS['_PX_request'], $object, $action, $state, $transaction);
         foreach ($this->signals as $signal) {
             Pluf_Signal::send($signal, 'Workflow_Machine', $event);
         }
@@ -87,42 +86,42 @@ class Workflow_Machine
     /**
      * Applies action on the object
      *
-     * @param Pluf_Model $object            
-     * @param string $action            
+     * @param Pluf_Model $object
+     * @param string $action
      * @return Workflow_Machine
      */
-    public function apply ($object, $action)
+    public function apply($object, $action)
     {
-        $stateName = $object->state;
+        $stateName = $object->{$this->statePropertyName};
+        $state = null;
         if (empty($stateName)) {
             $stateName = Workflow_Machine::STATE_UNDEFINED;
-            $state = null;
-            if (array_key_exists(Workflow_Machine::STATE_UNDEFINED, 
-                    $this->states)) {
+            if (array_key_exists(Workflow_Machine::STATE_UNDEFINED, $this->states)) {
+                $state = array();
+                $state['name'] = $stateName;
                 $transaction = $this->states[Workflow_Machine::STATE_UNDEFINED];
             } else {
                 throw new Pluf_Exception(sprintf("Unknown state!", $stateName));
             }
         } else {
             $state = $this->getState($object);
-            $state['name'] = $object->state;
+            $state['name'] = $object->{$this->statePropertyName};
             $transaction = $this->getTransaction($state, $action);
         }
         $this->checkPreconditions($object, $action, $transaction);
         // Run the transaction
         $result = true;
         if (array_key_exists(Workflow_Machine::KEY_ACTION, $transaction)) {
-            $result = call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], 
-                    array(
-                            $GLOBALS['_PX_request'],
-                            $object,
-                            $action
-                    ));
+            $result = call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], array(
+                $GLOBALS['_PX_request'],
+                $object,
+                $action
+            ));
         }
         // Update state
-        $object->state = $transaction['next'];
+        $object->{$this->statePropertyName} = $transaction['next'];
         $object->update();
-        
+
         // Send signals
         $this->sendSignals($object, $action, $state, $transaction);
         return $result;
@@ -131,11 +130,11 @@ class Workflow_Machine
     /**
      * Check if it is possible to perform action
      *
-     * @param Pluf_Model $object            
-     * @param string $action            
+     * @param Pluf_Model $object
+     * @param string $action
      * @return boolean true if it is possible to apply action.
      */
-    public function can ($object, $action)
+    public function can($object, $action)
     {
         return false;
     }
@@ -143,31 +142,28 @@ class Workflow_Machine
     /*
      * Gets state
      */
-    private function getState ($object)
+    private function getState($object)
     {
-        $stateName = $object->state;
+        $stateName = $object->{$this->statePropertyName};
         // check state
         if (! array_key_exists($stateName, $this->states)) {
             // throw invalid state
-            throw new Pluf_Exception(
-                    sprintf("State not found(name:%s)", $stateName));
+            throw new Pluf_Exception(sprintf("State not found(name:%s)", $stateName));
         }
         return $this->states[$stateName];
     }
 
-    private function getTransaction ($state, $action)
+    private function getTransaction($state, $action)
     {
         // check action
         if (! array_key_exists($action, $state)) {
             // throw invalid transaction
-            throw new Pluf_Exception(
-                    sprintf("transaction not found (State:%s, Action:%s)", 
-                            $state['name'], $action));
+            throw new Pluf_Exception(sprintf("transaction not found (State:%s, Action:%s)", $state['name'], $action));
         }
         return $state[$action];
     }
 
-    private function checkPreconditions ($object, $action, $transaction)
+    private function checkPreconditions($object, $action, $transaction)
     {
         // check all preconditions
         $preconds = array();
@@ -175,16 +171,15 @@ class Workflow_Machine
             $precond = $transaction['preconditions'];
         }
         foreach ($preconds as $precond) {
-            call_user_func_array(explode('::', $precond), 
-                    array(
-                            $GLOBALS['_PX_request'],
-                            $object,
-                            $action
-                    ));
+            call_user_func_array(explode('::', $precond), array(
+                $GLOBALS['_PX_request'],
+                $object,
+                $action
+            ));
         }
     }
 
-    public function setStates ($states)
+    public function setStates($states)
     {
         $this->states = $states;
         return $this;
@@ -192,23 +187,23 @@ class Workflow_Machine
 
     /**
      * Sets list of signals
-     * 
+     *
      * @param array $signals
      * @return Workflow_Machine
      */
-    public function setSignals ($signals)
+    public function setSignals($signals)
     {
         $this->signals = $signals;
         return $this;
     }
 
-    public function setInitialState ($initialState)
+    public function setInitialState($initialState)
     {
         $this->initialState = $initialState;
         return $this;
     }
 
-    public function setProperty ($statePropertyName)
+    public function setProperty($statePropertyName)
     {
         $this->statePropertyName = $statePropertyName;
         return $this;
