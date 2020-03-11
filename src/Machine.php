@@ -1,5 +1,4 @@
 <?php
-
 /*
  * This file is part of Pluf Framework, a simple PHP Application Framework.
  * Copyright (C) 2010-2020 Phoinex Scholars Co. (http://dpq.co.ir)
@@ -17,6 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+namespace Pluf\Workflow;
+
+use Pluf\Exception;
+use Pluf;
+use Pluf_HTTP_Request;
+use Pluf_Model;
+use Pluf_Signal;
 
 // XXX: maso, handle otherwise states
 // XXX: maso, handle undefined state
@@ -27,7 +33,7 @@
  * The Workflow component provides tools for managing a workflow or finite state
  * machine.
  */
-class Workflow_Machine
+class Machine
 {
 
     const KEY_ACTION = 'action';
@@ -53,13 +59,13 @@ class Workflow_Machine
      * Perform action on object
      *
      * @deprecated use Workflow_Machine::apply($object, $action)
-     * @param unknown $request
-     * @param unknown $object
-     * @param unknown $action
-     * @throws Pluf_Exception
-     * @return Workflow_Machine
+     * @param Pluf_HTTP_Request $request
+     * @param Pluf_Model $object
+     * @param string $action
+     * @throws Exception
+     * @return Machine
      */
-    public function transact($request, $object, $action)
+    public function transact(Pluf_HTTP_Request $request, Pluf_Model $object, string $action): Machine
     {
         return $this->apply($object, $action);
     }
@@ -69,15 +75,15 @@ class Workflow_Machine
      *
      * @param Pluf_Model $object
      * @param string $action
-     * @param unknown $state
-     * @param unknown $transaction
+     * @param Object $state
+     * @param Object $transaction
      */
-    private function sendSignals($object, $action, $state, $transaction)
+    private function sendSignals(Pluf_Model $object, string $action, $state, $transaction)
     {
         if (! isset($this->signals) || ! is_array($this->signals)) {
             return;
         }
-        $event = new Workflow_Event($GLOBALS['_PX_request'], $object, $action, $state, $transaction);
+        $event = new Event(Pluf::getCurrentRequest(), $object, $action, $state, $transaction);
         foreach ($this->signals as $signal) {
             Pluf_Signal::send($signal, 'Workflow_Machine', $event);
         }
@@ -88,20 +94,20 @@ class Workflow_Machine
      *
      * @param Pluf_Model $object
      * @param string $action
-     * @return Workflow_Machine
+     * @return Machine
      */
-    public function apply($object, $action)
+    public function apply(Pluf_Model $object, string $action)
     {
         $stateName = $object->{$this->statePropertyName};
         $state = null;
         if (empty($stateName)) {
-            $stateName = Workflow_Machine::STATE_UNDEFINED;
-            if (array_key_exists(Workflow_Machine::STATE_UNDEFINED, $this->states)) {
+            $stateName = Machine::STATE_UNDEFINED;
+            if (array_key_exists(Machine::STATE_UNDEFINED, $this->states)) {
                 $state = array();
                 $state['name'] = $stateName;
-                $transaction = $this->states[Workflow_Machine::STATE_UNDEFINED];
+                $transaction = $this->states[Machine::STATE_UNDEFINED];
             } else {
-                throw new Pluf_Exception(sprintf("Unknown state!", $stateName));
+                throw new Exception(sprintf("Unknown state!", $stateName));
             }
         } else {
             $state = $this->getState($object);
@@ -111,8 +117,8 @@ class Workflow_Machine
         $this->checkPreconditions($object, $action, $transaction);
         // Run the transaction
         $result = true;
-        if (array_key_exists(Workflow_Machine::KEY_ACTION, $transaction)) {
-            $result = call_user_func_array($transaction[Workflow_Machine::KEY_ACTION], array(
+        if (array_key_exists(Machine::KEY_ACTION, $transaction)) {
+            $result = call_user_func_array($transaction[Machine::KEY_ACTION], array(
                 $GLOBALS['_PX_request'],
                 $object,
                 $action
@@ -148,7 +154,7 @@ class Workflow_Machine
         // check state
         if (! array_key_exists($stateName, $this->states)) {
             // throw invalid state
-            throw new Pluf_Exception(sprintf("State not found(name:%s)", $stateName));
+            throw new Exception(sprintf("State not found(name:%s)", $stateName));
         }
         return $this->states[$stateName];
     }
@@ -158,7 +164,7 @@ class Workflow_Machine
         // check action
         if (! array_key_exists($action, $state)) {
             // throw invalid transaction
-            throw new Pluf_Exception(sprintf("transaction not found (State:%s, Action:%s)", $state['name'], $action));
+            throw new Exception(sprintf("transaction not found (State:%s, Action:%s)", $state['name'], $action));
         }
         return $state[$action];
     }
@@ -189,9 +195,9 @@ class Workflow_Machine
      * Sets list of signals
      *
      * @param array $signals
-     * @return Workflow_Machine
+     * @return Machine
      */
-    public function setSignals($signals)
+    public function setSignals($signals): Machine
     {
         $this->signals = $signals;
         return $this;

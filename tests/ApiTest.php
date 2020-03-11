@@ -1,15 +1,22 @@
 <?php
-use PHPUnit\Framework\TestCase;
+namespace Pluf\Test\Workflow;
+
+use Pluf\Test\TestCase;
+use Pluf\Workflow\Event;
+use Pluf\Workflow\Machine;
+use Pluf;
 
 class ApiTest extends TestCase
 {
 
     /**
+     *
      * @beforeClass
      */
-    public static function setPlfu ()
+    public static function setPlfu()
     {
-        require_once 'Pluf.php';
+        Pluf::start('conf/config.php');
+        $GLOBALS['_PX_request'] = array();
     }
 
     /**
@@ -17,10 +24,10 @@ class ApiTest extends TestCase
      *
      * @test
      */
-    public function instance ()
+    public function instance()
     {
         // Machine
-        $wm = new Workflow_Machine();
+        $wm = new Machine();
         $this->assertTrue(isset($wm));
         // Event
         $request = null;
@@ -28,7 +35,7 @@ class ApiTest extends TestCase
         $action = null;
         $state = null;
         $transaction = null;
-        $event = new Workflow_Event($request, $object, $action, $state, $transaction);
+        $event = new Event($request, $object, $action, $state, $transaction);
         $this->assertTrue(isset($event));
     }
 
@@ -37,19 +44,19 @@ class ApiTest extends TestCase
      *
      * @test
      */
-    public function methods ()
+    public function methods()
     {
-        $object = new Workflow_Machine();
+        $object = new Machine();
         $method_names = array(
-                'transact',
-                
-                'setStates',
-                'setSignals',
-                'setInitialState',
-                'setProperty',
-                
-                'apply',
-                'can'
+            'transact',
+
+            'setStates',
+            'setSignals',
+            'setInitialState',
+            'setProperty',
+
+            'apply',
+            'can'
         );
         foreach ($method_names as $method_name) {
             $this->assertTrue(method_exists($object, $method_name));

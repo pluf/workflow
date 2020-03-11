@@ -1,58 +1,70 @@
 <?php
-use PHPUnit\Framework\TestCase;
-require_once 'Pluf.php';
+namespace Pluf\Test\Workflow;
 
-class TurnstileSignalTest
-{
-
-    var $state;
-
-    var $update_counter;
-
-    function __construct()
-    {
-        $this->update_counter = 0;
-    }
-
-    public function update()
-    {
-        $this->update_counter ++;
-    }
-}
+use Pluf\NoteBook\Book;
+use Pluf\Test\TestCase;
+use Pluf\Workflow\Machine;
+use Pluf;
+use Pluf_Migration;
+use Pluf_Signal;
+use Pluf\Workflow\Event;
 
 class SignalTest extends TestCase
 {
 
     var $machine = null;
 
-    public static $signalEvent = null;
+    public static int $counter = 0;
+
+    public static ?string $signalEvent = null;
 
     public static function signalPoint($event)
     {
-        static::$signalEvent = $event;
+        self::$signalEvent = $event;
+        self::$counter ++;
     }
 
     /**
+     *
      * @beforeClass
      */
-    public static function setPluf()
+    public static function setupApplication()
     {
-        $GLOBALS['_PX_request'] = array();
+        Pluf::start('conf/config.php');
+        $m = new Pluf_Migration();
+        $m->install();
     }
 
     /**
+     *
+     * @afterClass
+     */
+    public static function deleteApplication()
+    {
+        $m = new Pluf_Migration();
+        $m->uninstall();
+    }
+
+    public function cleanTestVariables(): void
+    {
+        self::$counter = 0;
+        self::$signalEvent = null;
+    }
+
+    /**
+     *
      * @before
      */
     public function instance()
     {
         // create maching
-        $this->machine = new Workflow_Machine();
+        $this->machine = new Machine();
         $this->assertTrue(isset($this->machine));
-        
+
         $initState = 'Locked';
         // Machine
         $states = array(
-            Workflow_Machine::STATE_UNDEFINED => array(
+            Machine::STATE_UNDEFINED => array(
                 'next' => 'Locked'
             ),
             // State
@@ -75,10 +87,13 @@ class SignalTest extends TestCase
                 )
             )
         );
-        $this->machine->setStates($states)->setInitialState($initState)->setProperty('state');
+        $this->machine->setStates($states)
+            ->setInitialState($initState)
+            ->setProperty('state');
     }
 
     /**
+     *
      * @test
      */
     public function sendState()
@@ -86,24 +101,24 @@ class SignalTest extends TestCase
         //
         $signal = 'Signal_' . rand();
         Pluf_Signal::connect($signal, array(
-            'SignalTest',
+            '\Pluf\Test\Workflow\SignalTest',
             'signalPoint'
         ));
         $this->machine->setSignals(array(
             $signal
         ));
-        
+
         // apply
-        $object = new TurnstileSignalTest();
-        $request = array();
+        $object = new Book();
         $this->machine->apply($object, 'push');
         $this->assertTrue($object->state === 'Locked');
-        
+
         // check signal
         $this->assertNotNull(static::$signalEvent);
     }
 
     /**
+     *
      * @test
      */
     public function sendNullSignal()
@@ -111,33 +126,32 @@ class SignalTest extends TestCase
         $this->machine->setSignals(null);
         static::$signalEvent = null;
         // apply
-        $object = new TurnstileSignalTest();
-        $request = array();
+        $object = new Book();
         $this->machine->apply($object, 'push');
         $this->assertTrue($object->state === 'Locked');
-        
+
         // check signal
         $this->assertNull(static::$signalEvent);
     }
 
     /**
+     *
      * @test
      */
     public function sendEmptySignal()
     {
         $signal = 'Signal_' . rand();
         Pluf_Signal::connect($signal, array(
-            'SignalTest',
+            '\Pluf\Test\Workflow\SignalTest',
             'signalPoint'
         ));
         $this->machine->setSignals(array());
-        
+
         // apply
-        $object = new TurnstileSignalTest();
-        $request = array();
+        $object = new Book();
         $this->machine->apply($object, 'push');
         $this->assertTrue($object->state === 'Locked');
-        
+
         // check signal
         $this->assertNull(static::$signalEvent);
     }
