@@ -1,19 +1,11 @@
 <?php
-use PHPUnit\Framework\TestCase;
+namespace Pluf\Test\Workflow;
 
-class Turnstile
-{
-    var $state;
-    var $update_counter;
-    
-    function __construct(){
-        $this->update_counter = 0;
-    }
-    
-    public function update(){
-        $this->update_counter ++;
-    }
-}
+use Pluf\Test\TestCase;
+use Pluf\Workflow\Machine;
+use Pluf;
+use Pluf_Migration;
+use Pluf\NoteBook\Book;
 
 /**
  * Trunstile test
@@ -43,90 +35,102 @@ class Turnstile
  * @author maso<mostafa.barmshory@dpq.co.ir>
  *        
  */
-
 class TurnstileTest extends TestCase
 {
 
     var $machine = null;
 
     /**
+     *
      * @beforeClass
      */
-    public static function setPlfu ()
+    public static function setupApplication()
     {
-        $GLOBALS['_PX_request'] = array();
-        require_once 'Pluf.php';
+        Pluf::start('conf/config.php');
+        $m = new Pluf_Migration();
+        $m->install();
     }
 
     /**
+     *
+     * @afterClass
+     */
+    public static function deleteApplication()
+    {
+        $m = new Pluf_Migration();
+        $m->uninstall();
+    }
+
+    /**
+     *
      * @before
      */
-    public function instance ()
+    public function instance()
     {
         // create maching
-        $this->machine = new Workflow_Machine();
+        $this->machine = new Machine();
         $this->assertTrue(isset($this->machine));
-        
+
         // Machine
         $states = array(
-                Workflow_Machine::STATE_UNDEFINED => array(
-                        'next' => 'Locked'
+            Machine::STATE_UNDEFINED => array(
+                'next' => 'Locked'
+            ),
+            // State
+            'Locked' => array(
+                // Transaction or event
+                'coin' => array(
+                    'next' => 'Unlocked',
+                    // 'action' => array(
+                    // 'Spa_SPA_Manager_Simple',
+                    // 'checkUpdate'
+                    // ),
+                    // 'preconditions' => array(
+                    // 'User_Precondition::isOwner'
+                    // ),
+                    // client side
+                    'title' => '',
+                    'description' => '',
+                    'properties' => array()
                 ),
-                // State
-                'Locked' => array(
-                        // Transaction or event
-                        'coin' => array(
-                            'next' => 'Unlocked',
-//                             'action' => array(
-//                                 'Spa_SPA_Manager_Simple',
-//                                 'checkUpdate'
-//                             ),
-//                             'preconditions' => array(
-//                                 'User_Precondition::isOwner'
-//                             ),
-                            //  client side
-                                'title' => '',
-                                'description' => '',
-                                'properties' => array()
-                        ),
-                        'push' => array(
-                                'next' => 'Locked'
-                        )
-                ),
-                'Unlocked' => array(
-                        // Transaction or event
-                        'coin' => array(
-                                'next' => 'Unlocked'
-                        ),
-                        'push' => array(
-                                'next' => 'Locked'
-                        )
+                'push' => array(
+                    'next' => 'Locked'
                 )
+            ),
+            'Unlocked' => array(
+                // Transaction or event
+                'coin' => array(
+                    'next' => 'Unlocked'
+                ),
+                'push' => array(
+                    'next' => 'Locked'
+                )
+            )
         );
         $initState = 'Locked';
         $this->machine->setStates($states)->setInitialState($initState);
     }
 
     /**
+     *
      * @test
      */
-    public function initObject ()
+    public function initObject()
     {
-        $object = new Turnstile();
-        $request = null;
-        $this->machine->transact($request, $object, 'push');
+        $object = new Book();
+        $this->machine->apply($object, 'push');
         $this->assertTrue($object->state === 'Locked');
     }
-    
+
     /**
+     *
      * @test
      */
-    public function validObject ()
+    public function validObject()
     {
-        $object = new Turnstile();
+        $object = new Book();
         $object->state = 'Locked';
-        $request = null;
-        $this->machine->transact($request, $object, 'push');
+        $this->machine->apply($object, 'push');
         $this->assertTrue($object->state === 'Locked');
     }
 }

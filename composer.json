@@ -1,5 +1,6 @@
 {
 	"name" : "pluf/workflow",
+	"version" : "6.0.5",
 	"description" : "Fast workflow manager.",
 	"type" : "library",
 	"license" : "MIT",
@@ -12,28 +13,54 @@
 	],
 	"minimum-stability" : "stable",
 	"require" : {
-		"pluf/core" : "5.13.x"
+		"pluf/core" : "6.x"
 	},
 	"require-dev" : {
-		"pluf/test" : "5.13.x"
+		"pluf/test" : "6.x"
 	},
-	"include-path" : [
-		"src/"
-	],
 	"keywords" : [
 		"pluf",
 		"workflow"
 	],
-	"autoload" : {
-		"psr-0" : {
-			"test" : ""
-		}
-	},
 	"support" : {
 		"email" : "info@pluf.ir",
 		"issues" : "https://github.com/pluf/workflow/issues",
 		"wiki" : "https://github.com/pluf/workflow/wiki",
 		"source" : "https://github.com/pluf/workflow"
 	},
-	"homepage" : "http://pluf.ir"
+	"homepage" : "http://pluf.ir",
+	"autoload" : {
+		"psr-4" : {
+			"Pluf\\Workflow\\" : "src"
+		}
+	},
+	"autoload-dev" : {
+		"psr-4" : {
+			"Pluf\\Test\\" : "tests",
+			"Pluf\\NoteBook\\" : "example/NoteBook"
+		}
+	},
+	"repositories" : [{
+			"type" : "path",
+			"url" : "../core",
+			"name" : "pluf/core",
+			"options" : {
+				"symlink" : true
+			}
+		}, {
+			"type" : "path",
+			"url" : "../test",
+			"name" : "pluf/test",
+			"options" : {
+				"symlink" : true
+			}
+		}, {
+			"type" : "path",
+			"url" : "../http2",
+			"name" : "pluf/http2",
+			"options" : {
+				"symlink" : true
+			}
+		}
+	]
 }
