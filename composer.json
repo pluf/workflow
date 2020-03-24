@@ -40,7 +40,7 @@
 			"Pluf\\NoteBook\\" : "example/NoteBook"
 		}
 	},
-	"repositories" : [{
+	"repositories~" : [{
 			"type" : "path",
 			"url" : "../core",
 			"name" : "pluf/core",
