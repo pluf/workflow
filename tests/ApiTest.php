@@ -15,7 +15,7 @@ class ApiTest extends TestCase
      */
     public static function setPlfu()
     {
-        Pluf::start('conf/config.php');
+        Pluf::start(__DIR__ . '/conf/config.php');
         $GLOBALS['_PX_request'] = array();
     }
 
