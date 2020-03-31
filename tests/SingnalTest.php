@@ -30,7 +30,7 @@ class SignalTest extends TestCase
      */
     public static function setupApplication()
     {
-        Pluf::start('conf/config.php');
+        Pluf::start(__DIR__ . '/conf/config.php');
         $m = new Pluf_Migration();
         $m->install();
     }
