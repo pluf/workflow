@@ -1,6 +1,6 @@
 {
 	"name" : "pluf/workflow",
-	"version" : "6.0.13",
+	"version" : "6.0.14",
 	"description" : "Fast workflow manager.",
 	"type" : "library",
 	"license" : "MIT",
