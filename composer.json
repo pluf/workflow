@@ -13,10 +13,10 @@
 	],
 	"minimum-stability" : "stable",
 	"require" : {
-		"pluf/core" : "6.x"
+		"psr/log" : "1.1.x"
 	},
 	"require-dev" : {
-		"pluf/test" : "6.x"
+		"phpunit/phpunit" : "^9"
 	},
 	"keywords" : [
 		"pluf",
@@ -36,31 +36,7 @@
 	},
 	"autoload-dev" : {
 		"psr-4" : {
-			"Pluf\\Test\\" : "tests",
-			"Pluf\\NoteBook\\" : "example/NoteBook"
+			"Pluf\\Tests\\" : "./tests"
 		}
-	},
-	"repositories~" : [{
-			"type" : "path",
-			"url" : "../core",
-			"name" : "pluf/core",
-			"options" : {
-				"symlink" : true
-			}
-		}, {
-			"type" : "path",
-			"url" : "../test",
-			"name" : "pluf/test",
-			"options" : {
-				"symlink" : true
-			}
-		}, {
-			"type" : "path",
-			"url" : "../http2",
-			"name" : "pluf/http2",
-			"options" : {
-				"symlink" : true
-			}
-		}
-	]
+	}
 }

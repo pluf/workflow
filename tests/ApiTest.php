@@ -1,65 +1,45 @@
 <?php
-namespace Pluf\Test\Workflow;
+namespace Pluf\Tests;
 
-use Pluf\Test\TestCase;
-use Pluf\Workflow\Event;
-use Pluf\Workflow\Machine;
-use Pluf;
+use PHPUnit\Framework\TestCase;
+use Pluf\Tests\NoteBook\BookStates;
+use Pluf\Workflow\Attributes\State;
+use Pluf\Workflow\Attributes\States;
+use ReflectionClass;
 
 class ApiTest extends TestCase
 {
-
-    /**
-     *
-     * @beforeClass
-     */
-    public static function setPlfu()
-    {
-        Pluf::start(__DIR__ . '/conf/config.php');
-        $GLOBALS['_PX_request'] = array();
-    }
 
     /**
      * Can create new instance
      *
      * @test
      */
-    public function instance()
+    public function instanceStatesProg()
     {
         // Machine
-        $wm = new Machine();
-        $this->assertTrue(isset($wm));
-        // Event
-        $request = null;
-        $object = null;
-        $action = null;
-        $state = null;
-        $transaction = null;
-        $event = new Event($request, $object, $action, $state, $transaction);
-        $this->assertTrue(isset($event));
+        $wm = new States();
+        $this->assertNotNull($wm);
+        $wm = new States([
+            new State(name: 'a', finalState: false),
+            new State(name: 'b', finalState: false),
+            new State(name: 'c', finalState: true)
+        ]);
+        $wm = new States();
     }
 
     /**
-     * Check class api
+     * To load states from attributes
      *
      * @test
      */
-    public function methods()
+    public function instanceStatesAttributes()
     {
-        $object = new Machine();
-        $method_names = array(
-            'transact',
+        $reflector = new ReflectionClass(BookStates::class);
+        $this->assertNotNull($reflector);
 
-            'setStates',
-            'setSignals',
-            'setInitialState',
-            'setProperty',
-
-            'apply',
-            'can'
-        );
-        foreach ($method_names as $method_name) {
-            $this->assertTrue(method_exists($object, $method_name));
-        }
+        $attributes = $reflector->getAttributes(State::class);
+        $this->assertIsArray($attributes);
+        $this->assertNotEmpty($attributes);
     }
 }
