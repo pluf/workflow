@@ -1,30 +1,34 @@
 <?php
 namespace Pluf\Workflow\Imp;
 
+use Pluf\Di\Container;
+use Pluf\Workflow\Action;
+use Pluf\Workflow\ActionExecutionService;
 use Pluf\Workflow\HistoryType;
 use Pluf\Workflow\MutableState;
+use Pluf\Workflow\MutableTransition;
+use Pluf\Workflow\StateMachine;
+use Pluf\Workflow\StateMachineBuilder;
 use Pluf\Workflow\StateMachineConfiguration;
 use Pluf\Workflow\UntypedStateMachineBuilder;
-use Pluf\Workflow\StateMachineBuilder;
+use Pluf\Workflow\Actions\FinalStateGuardAction;
+use Pluf\Workflow\Attributes\State;
+use Pluf\Workflow\Attributes\Transit;
 use Pluf\Workflow\Builder\DeferBoundActionBuilder;
 use Pluf\Workflow\Builder\EntryExitActionBuilder;
 use Pluf\Workflow\Builder\ExternalTransitionBuilder;
 use Pluf\Workflow\Builder\InternalTransitionBuilder;
 use Pluf\Workflow\Builder\LocalTransitionBuilder;
 use Pluf\Workflow\Builder\MultiTransitionBuilder;
-use Pluf\Workflow\IllegalStateException;
-use Pluf\Workflow\Attributes\State;
-use Pluf\Workflow\Attributes\Transit;
-use Pluf\Workflow\StateMachine;
-use Pluf\Workflow\Actions\FinalStateGuardAction;
-use Pluf\Workflow\IllegalArgumentException;
-use ReflectionClass;
+use Pluf\Workflow\Component\IdProviderUUID;
+use Pluf\Workflow\Exceptions\IllegalArgumentException;
+use Pluf\Workflow\Exceptions\IllegalStateException;
 use ArrayObject;
-use Pluf\Workflow\Action;
-use Pluf\Workflow\MutableTransition;
+use ReflectionClass;
 
 class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachineBuilder
 {
+    use AssertTrait;
 
     // static {
     // DuplicateChecker.checkDuplicate(StateMachineBuilder.class);
@@ -65,7 +69,8 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
 
     private $terminateEvent;
 
-    private $executionContext;
+    // Not supported, a DI system is replaced
+    private ?ActionExecutionService $actionExecutionService = null;
 
     // ExecutionContext
     private array $deferBoundActionInfoList = [];
@@ -74,7 +79,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
 
     private array $extraParamTypes = [];
 
-    private StateMachineConfiguration $defaultConfiguration;
+    private ?StateMachineConfiguration $stateMachineConfiguration = null;
 
     public function __construct()
     {
@@ -88,11 +93,20 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         }
     }
 
+    /**
+     * Prepares the builder
+     *
+     * It may load all descriptions from the state machine class and merge with
+     * flute api.
+     */
     private function prepare(): void
     {
         if ($this->prepared) {
             return;
         }
+
+        $container = $this->getContainer();
+        $container['stateMachinBuilder'] = Container::value($this);
 
         if ($this->scanAnnotations) {
             // 1. install all the declare states, states must be installed before installing transition and extension methods
@@ -256,24 +270,22 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
 
     private function addTransitionMethodCallAction(string $methodName, $parameterTypes, MutableTransition $mutableTransition): void
     {
-        $method = $this->findMethodCallActionInternal($this->stateMachineImplClazz, $methodName, $parameterTypes);
-        if ($method != null) {
-            $methodCallAction = FSM::newMethodCallAction($method, Action::EXTENSION_WEIGHT, $this->executionContext);
+        if ($this->hasMethod($this->stateMachineImplClazz, $methodName)) {
+            $methodCallAction = FSM::newMethodCallAction($methodName, Action::EXTENSION_WEIGHT);
             $mutableTransition->addAction($methodCallAction);
         }
     }
 
     private function addStateEntryExitMethodCallAction(string $methodName, $parameterTypes, MutableState $mutableState, bool $isEntryAction): void
     {
-        $method = $this->findMethodCallActionInternal($this->stateMachineImplClazz, $methodName, $parameterTypes);
-        if ($method != null) {
+        if ($this->hasMethod($this->stateMachineImplClazz, $methodName)) {
             $weight = Action::EXTENSION_WEIGHT;
-            if ($methodName->startsWith("before")) {
+            if (str_starts_with($methodName, "before")) {
                 $weight = Action::BEFORE_WEIGHT;
-            } else if ($methodName->startsWith("after")) {
+            } else if (str_starts_with($methodName, "after")) {
                 $weight = Action::AFTER_WEIGHT;
             }
-            $methodCallAction = FSM::newMethodCallAction($method, $weight, $this->executionContext);
+            $methodCallAction = FSM::newMethodCallAction($methodName, $weight);
             if ($isEntryAction) {
                 $mutableState->addEntryAction($methodCallAction);
             } else {
@@ -286,10 +298,9 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
     {
         $prefix = ($isEntry ? "entry" : "exit");
         $postfix = ($isEntry ? "EntryAny" : "ExitAny");
-        // XXX: capitilize state name
         return [
             "before" . $postfix,
-            $prefix . (($this->stateConverter != null && ! $state->isFinalState()) ? $this->stateConverter->convertToString($state->getStateId()) : $state),
+            $prefix . ucfirst(($this->stateConverter != null && ! $state->isFinalState()) ? $this->stateConverter->convertToString($state->getStateId()) : $state),
             "after" . $postfix
         ];
     }
@@ -299,12 +310,10 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         $fromState = $transition->getSourceState();
         $toState = $transition->getTargetState();
         $event = $transition->getEvent();
-        $fromStateName = $this->stateConverter != null ? $this->stateConverter . convertToString($fromState->getStateId()) : $fromState;
-        $toStateName = ($this->stateConverter != null && ! $toState->isFinalState()) ? $this->stateConverter->convertToString($toState->getStateId()) : $toState;
-        $eventName = $this->eventConverter != null ? $this->eventConverter->convertToString($event) : $event;
-        $conditionName = $transition->getCondition()->name();
-
-        // XXX: maso, 2020: capitilize names
+        $fromStateName = ucfirst($this->stateConverter != null ? $this->stateConverter . convertToString($fromState->getStateId()) : $fromState);
+        $toStateName = ucfirst(($this->stateConverter != null && ! $toState->isFinalState()) ? $this->stateConverter->convertToString($toState->getStateId()) : $toState);
+        $eventName = ucfirst($this->eventConverter != null ? $this->eventConverter->convertToString($event) : $event);
+        $conditionName = ucfirst($transition->getCondition()->name());
         return [
             "transitFrom" . $fromStateName . "To" . $toStateName . "On" . $eventName . "When" . $conditionName,
             "transitFrom" . $fromStateName . "To" . $toStateName . "On" . $eventName,
@@ -375,24 +384,22 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         // }
     }
 
-    static function findMethodCallActionInternal($target, string $methodName, $parameterTypes)
+    /**
+     *
+     * @deprecated use searchMethod
+     * @param string $target
+     * @param string $methodName
+     * @return NULL
+     */
+    protected function findMethodCallActionInternal(string $target, string $methodName)
     {
-        return self::searchMethod($target, AbstractStateMachine::class, $methodName, $parameterTypes);
+        return $this->hasMethod($target, $methodName);
     }
 
-    private static function searchMethod(string $targetClass, string $superClass, string $methodName, $parameterTypes)
+    protected function hasMethod(string $targetClass, string $name)
     {
-        // if(superClass.isAssignableFrom(targetClass)) {
-        // $clazz = targetClass;
-        // while(!superClass.equals(clazz)) {
-        // try {
-        // return clazz.getDeclaredMethod(methodName, parameterTypes);
-        // } catch (NoSuchMethodException e) {
-        // clazz = clazz.getSuperclass();
-        // }
-        // }
-        // }
-        return null;
+        $reflectionClass = new ReflectionClass($targetClass);
+        return $reflectionClass->hasMethod($name);
     }
 
     public function setStateMachinClass($stateMachineClass): self
@@ -402,11 +409,19 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         return $this;
     }
 
-    public function setContainer($container): self
+    public function setContainer(Container $container): self
     {
         $this->checkState();
         $this->container = $container;
         return $this;
+    }
+
+    protected function getContainer(): Container
+    {
+        if (! isset($this->container)) {
+            $this->container = new Container();
+        }
+        return $this->container;
     }
 
     public function setStateType($stateType): self
@@ -469,7 +484,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
     public function externalTransition(int $priority = 1): ExternalTransitionBuilder
     {
         $this->checkState();
-        return FSM::newExternalTransitionBuilder($this->states, $priority, $this->executionContext);
+        return FSM::newExternalTransitionBuilder($this->states, $priority);
     }
 
     public function defineTerminateEvent($terminateEvent): void
@@ -502,8 +517,31 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
     public function defineSequentialStatesOn($parentStateId, $childStateIds, ?HistoryType $historyType = null): void
     {}
 
-    public function setStateMachineConfiguration(StateMachineConfiguration $configure): void
-    {}
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::setStateMachineConfiguration()
+     */
+    public function setStateMachineConfiguration(?StateMachineConfiguration $configure = null): self
+    {
+        $this->stateMachineConfiguration = $configure;
+    }
+
+    /**
+     * Gets the state machine configurateion
+     *
+     * A new instance will be created if no configuration has not setted
+     *
+     * @return StateMachineConfiguration the configuration
+     */
+    protected function getStateMachineConfiguration(): StateMachineConfiguration
+    {
+        if (! isset($this->stateMachineConfiguration)) {
+            $this->stateMachineConfiguration = StateMachineConfiguration::create();
+            $this->stateMachineConfiguration->setIdProvider(new IdProviderUUID());
+        }
+        return $this->stateMachineConfiguration;
+    }
 
     public function newUntypedStateMachine($initialStateId, StateMachineConfiguration $configuration, ...$extraParams)
     {}
@@ -535,67 +573,12 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
     public function localTransition(int $priority = 0): LocalTransitionBuilder
     {}
 
-    /**
-     * 
-     * {@inheritDoc}
-     * @see \Pluf\Workflow\StateMachineBuilder::newStateMachine()
-     */
-    public function newStateMachine($initialStateId, ?StateMachineConfiguration $configuration = null, array $extraParams = null): StateMachine
+    private function postConstructStateMachine(AbstractStateMachine $stateMachine): void
     {
-        if (! $this->prepared) {
-            $this->prepare();
-        }
-        if (! $this->isValidState($initialStateId)) {
-            throw new IllegalArgumentException("Cannot find Initial state \'" . $initialStateId . "\' in state machine.");
-        }
-        if(!isset($configuration)){
-            $configuration = StateMachineConfiguration::create();
-        }
-
-        // Class[] constParamTypes = constructor.getParameterTypes();
-        $stateMachine = new AbstractStateMachine();
-        // try {
-        // if(constParamTypes==null || constParamTypes.length==0) {
-        // stateMachine = ReflectUtils.newInstance(constructor);
-        // } else {
-        // stateMachine = ReflectUtils.newInstance(constructor, extraParams);
-        // }
-        // } catch(SquirrelRuntimeException e) {
-        // throw new IllegalStateException(
-        // "New state machine instance failed.", e.getTargetException());
-        // }
-
-        $stateMachineImpl = $stateMachine;
-        $stateMachineImpl->prePostConstruct($initialStateId, $this->states, $configuration /*
-         * , new Runnable() {
-         * public void run() {
-         * stateMachineImpl.setStartEvent(startEvent);
-         * stateMachineImpl.setFinishEvent(finishEvent);
-         * stateMachineImpl.setTerminateEvent(terminateEvent);
-         * stateMachineImpl.setExtraParamTypes(extraParamTypes);
-         *
-         * stateMachineImpl.setTypeOfStateMachine(stateMachineImplClazz);
-         * stateMachineImpl.setTypeOfState(stateClazz);
-         * stateMachineImpl.setTypeOfEvent(eventClazz);
-         * stateMachineImpl.setTypeOfContext(contextClazz);
-         * stateMachineImpl.setScriptManager(scriptManager);
-         * }
-         * }
-         */
-        );
-
-        if ($this->postConstructMethod != null /* && $this->extraParamTypes.length==extraParams.length */) {
-            // try {
-            // ReflectUtils.invoke(postConstructMethod, stateMachine, extraParams);
-            // } catch(SquirrelRuntimeException e) {
-            // throw new IllegalStateException(
-            // "Invoke state machine postConstruct method failed.", e.getTargetException());
-            // }
+        if (isset($this->postConstructMethod)) {
             // TODO: invokde the post constractur
+            // the method must be in the state machine implementation
         }
-        $this->postProcessStateMachine($this->stateMachineImplClazz, $stateMachine);
-
-        return $stateMachine;
     }
 
     private function postProcessStateMachine(string $clz, $component)
@@ -619,8 +602,78 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
      */
     private function isValidState($initialStateId): bool
     {
-        // return array_key_exists($initialStateId, $this->states);
         return $this->states->offsetExists($initialStateId);
+    }
+
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::setScanAnnotations()
+     */
+    public function setScanAnnotations(bool $scanAnnotations): self
+    {
+        $this->scanAnnotations = $scanAnnotations;
+        return $this;
+    }
+
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::setActionExecutionService()
+     */
+    public function setActionExecutionService(ActionExecutionService $actionExecutionService): self
+    {
+        $this->actionExecutionService = $actionExecutionService;
+        return $this;
+    }
+
+    /**
+     * Gets execution service
+     *
+     * @return ActionExecutionService
+     */
+    protected function getActionExecutionService(): ActionExecutionService
+    {
+        if (! isset($this->actionExecutionService)) {
+            $container = $this->getContainer();
+            $this->actionExecutionService = new AbstractExecutionService($container);
+        }
+        return $this->actionExecutionService;
+    }
+
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::newStateMachine()
+     */
+    public function build($initialStateId, ?array $extraParams = null): StateMachine
+    {
+        $this->prepare();
+        if (! $this->isValidState($initialStateId)) {
+            throw new IllegalArgumentException("Cannot find Initial state \'" . $initialStateId . "\' in state machine.");
+        }
+
+        $configuration = $this->getStateMachineConfiguration();
+        $actionExecutionService = $this->getActionExecutionService();
+
+        // Just internal implementaion allowed
+        $stateMachine = new AbstractStateMachine($initialStateId, $this->states, $configuration);
+        $stateMachine->setStartEvent($this->startEvent)
+            ->setFinishEvent($this->finishEvent)
+            ->setTerminateEvent($this->terminateEvent)
+            ->setExtraParamTypes($this->extraParamTypes)
+            ->setTypeOfContext($this->contextType)
+            ->setTypeOfStateMachine($this->stateMachineImplClazz)
+            ->setTypeOfState($this->stateType)
+            ->setTypeOfEvent($this->eventType)
+            ->setScriptManager($this->scriptManager)
+            ->setActionExecutionService($actionExecutionService)
+            ->setEntryPoint(true);
+
+        // TODO: move to the state machin constructor
+        $this->postConstructStateMachine($stateMachine);
+        $this->postProcessStateMachine($this->stateMachineImplClazz, $stateMachine);
+        return $stateMachine;
     }
 }
 

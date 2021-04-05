@@ -12,7 +12,7 @@ interface MultiTransitionBuilder
      *
      * @param
      *            stateId id of state
-     * @return multi from clause builder
+     * @return MultiFrom from clause builder
      */
     function from($stateId): MultiFrom;
 
@@ -21,7 +21,7 @@ interface MultiTransitionBuilder
      *
      * @param
      *            stateIds id of states
-     * @return single from clause builder
+     * @return From from clause builder
      */
     function fromAmong($stateIds): From;
 

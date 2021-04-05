@@ -1,7 +1,13 @@
 <?php
 namespace Pluf\Tests\Atm;
 
-
+/**
+ * ATM State machin implementation
+ *
+ * A state machine implementation consist of several action to use in state machin transitions
+ *
+ * @author maso
+ */
 class ATMStateMachine
 {
 
@@ -123,12 +129,12 @@ class ATMStateMachine
 
     private function addOptionalDot()
     {
-        $this->log .= '.';
+        $this->log = '.' . $this->log;
     }
 
     private function logger($log)
     {
-        $this->log .= $log;
+        $this->log = $log . $this->log;
     }
 
     public function consumeLog()

@@ -8,14 +8,6 @@ use Pluf\Workflow\StateMachine;
 class ATMStateMachineTest extends TestCase
 {
     
-    /**
-     * @afterClass
-     */
-    public static function afterTest() {
-        ConverterProvider.INSTANCE.clearRegistry();
-        SquirrelPostProcessorProvider.getInstance().clearRegistry();
-    }
-    
     private ?StateMachine $stateMachine = null;
     
     /**
@@ -60,7 +52,7 @@ class ATMStateMachineTest extends TestCase
             ->to('InService')
             ->on("ConnectionRestored");
         
-        $this->stateMachine = $builder->newStateMachine('Idle');
+        $this->stateMachine = $builder->build('Idle');
         $this->assertNotNull($this->stateMachine, 'The state machine is not created.');
     }
     
@@ -78,48 +70,30 @@ class ATMStateMachineTest extends TestCase
      */
     public function testIdelToInService() {
         $this->stateMachine->start();
-        $this->assertEquals("entryIdle", $this->stateMachine->consumeLog(), is(equalTo()));
-        $this->assertEquals('Idle',      $this->stateMachine->getCurrentState(), is(equalTo(ATMState)));
+        $imple = $this->stateMachine->getImplementation();
         
-        $this->stateMachine->fire("Connected");
-        $this->assertEquals("exitIdle.transitFromIdleToLoadingOnConnected.entryLoading", $this->stateMachine->consumeLog());
+        $this->assertEquals("entryIdle.", $imple->consumeLog());
+        $this->assertEquals('Idle',      $this->stateMachine->getCurrentState());
+        
+        $this->stateMachine->fireEvent("Connected");
+        $this->assertEquals("exitIdle.transitFromIdleToLoadingOnConnected.entryLoading.", $imple->consumeLog());
         $this->assertEquals('Loading', $this->stateMachine->getCurrentState());
         
-        $this->stateMachine->fire("LoadSuccess");
-        $this->assertEquals("exitLoading.transitFromLoadingToInServiceOnLoadSuccess.entryInService", $this->stateMachine->consumeLog());
+        $this->stateMachine->fireEvent("LoadSuccess");
+        $this->assertEquals("exitLoading.transitFromLoadingToInServiceOnLoadSuccess.entryInService.", $imple->consumeLog());
         $this->assertEquals('InService', $this->stateMachine->getCurrentState());
         
-        $this->stateMachine->fire("Shutdown");
-        $this->assertEquals("exitInService.transitFromInServiceToOutOfServiceOnShutdown.entryOutOfService", $this->stateMachine->consumeLog());
+        $this->stateMachine->fireEvent("Shutdown");
+        $this->assertEquals("exitInService.transitFromInServiceToOutOfServiceOnShutdown.entryOutOfService.", $imple->consumeLog());
         $this->assertEquals('OutOfService', $this->stateMachine->getCurrentState());
         
-        $this->stateMachine->fire("ConnectionLost");
-        $this->assertEquals("exitOutOfService.transitFromOutOfServiceToDisconnectedOnConnectionLost.entryDisconnected", $this->stateMachine->consumeLog());
+        $this->stateMachine->fireEvent("ConnectionLost");
+        $this->assertEquals("exitOutOfService.transitFromOutOfServiceToDisconnectedOnConnectionLost.entryDisconnected.", $imple->consumeLog());
         $this->assertEquals('Disconnected', $this->stateMachine->getCurrentState());
         
-        $this->stateMachine->fire("ConnectionRestored");
-        $this->assertEquals("exitDisconnected.transitFromDisconnectedToInServiceOnConnectionRestored.entryInService", $this->stateMachine->consumeLog());
+        $this->stateMachine->fireEvent("ConnectionRestored");
+        $this->assertEquals("exitDisconnected.transitFromDisconnectedToInServiceOnConnectionRestored.entryInService.", $imple->consumeLog());
         $this->assertEquals('InService', $this->stateMachine->getCurrentState());
     }
-    
-//     /**
-//      * @Test
-//      */
-//     public function exportAndImportATMStateMachine() {
-//         SCXMLVisitor visitor = SquirrelProvider.getInstance().newInstance(SCXMLVisitor.class);
-//         stateMachine.accept(visitor);
-//         // visitor.convertSCXMLFile("ATMStateMachine", true);
-//         String xmlDef = visitor.getScxml(false);
-//         UntypedStateMachineBuilder builder = new UntypedStateMachineImporter().importDefinition(xmlDef);
-        
-//         ATMStateMachine stateMachine = builder.newAnyStateMachine(ATMState.Idle);
-//         stateMachine.start();
-//         assertThat(stateMachine.consumeLog(), is(equalTo("entryIdle")));
-//         assertThat(stateMachine.getCurrentState(), is(equalTo(ATMState.Idle)));
-        
-//         stateMachine.fire("Connected");
-//         assertThat(stateMachine.consumeLog(), is(equalTo("exitIdle.transitFromIdleToLoadingOnConnected.entryLoading")));
-//         assertThat(stateMachine.getCurrentState(), is(equalTo(ATMState.Loading)));
-//     }
 }
 

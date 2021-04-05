@@ -1,18 +1,19 @@
 <?php
 namespace Pluf\Workflow\Imp;
 
-use Pluf\Workflow\StateMachineData;
-use Pluf\Workflow\Builder\ExternalTransitionBuilder;
-use Pluf\Workflow\TransitionType;
-use Pluf\Workflow\Builder\LocalTransitionBuilder;
-use Pluf\Workflow\MutableTransition;
-use Pluf\Workflow\MutableState;
-use ArrayObject;
-use Pluf\Workflow\StateMachine;
-use Pluf\Workflow\ImmutableState;
-use Pluf\Workflow\TransitionResult;
 use Pluf\Workflow\ActionExecutionService;
+use Pluf\Workflow\ImmutableState;
+use Pluf\Workflow\MutableState;
+use Pluf\Workflow\MutableTransition;
 use Pluf\Workflow\StateContext;
+use Pluf\Workflow\StateMachine;
+use Pluf\Workflow\StateMachineData;
+use Pluf\Workflow\TransitionResult;
+use Pluf\Workflow\TransitionType;
+use Pluf\Workflow\Actions\MethodCallActionImpl;
+use Pluf\Workflow\Builder\ExternalTransitionBuilder;
+use Pluf\Workflow\Builder\LocalTransitionBuilder;
+use ArrayObject;
 
 class FSM
 {
@@ -66,19 +67,19 @@ class FSM
     // new Class[] { Map.class, TransitionType.class, int.class, ExecutionContext.class },
     // new Object[] { states, transitionType, priority, executionContext });
     // }
-    public static function newExternalTransitionBuilder($states, int $priority, $executionContext): ExternalTransitionBuilder
+    public static function newExternalTransitionBuilder($states, int $priority): ExternalTransitionBuilder
     {
-        return new TransitionBuilderImpl($states, TransitionType::EXTERNAL, $priority, $executionContext);
+        return new TransitionBuilderImpl($states, TransitionType::EXTERNAL, $priority);
     }
 
-    public static function newLocalTransitionBuilder($states, int $priority, $executionContext): LocalTransitionBuilder
+    public static function newLocalTransitionBuilder($states, int $priority): LocalTransitionBuilder
     {
-        return new TransitionBuilderImpl($states, TransitionType::LOCAL, $priority, $executionContext);
+        return new TransitionBuilderImpl($states, TransitionType::LOCAL, $priority);
     }
 
-    public static function newInternalTransitionBuilder($states, int $priority, $executionContext): LocalTransitionBuilder
+    public static function newInternalTransitionBuilder($states, int $priority): LocalTransitionBuilder
     {
-        return new TransitionBuilderImpl($states, TransitionType::INTERNAL, $priority, $executionContext);
+        return new TransitionBuilderImpl($states, TransitionType::INTERNAL, $priority);
     }
 
     // static <T extends StateMachine<T, S, E, C>, S, E, C> EntryExitActionBuilder<T, S, E, C> newEntryExitActionBuilder(
@@ -87,14 +88,10 @@ class FSM
     // new Class[] { MutableState.class, boolean.class, ExecutionContext.class},
     // new Object[] { state, isEntryAction, executionContext});
     // }
-
-    // static <T extends StateMachine<T, S, E, C>, S, E, C> MethodCallActionImpl<T, S, E, C> newMethodCallAction(
-    // Method method, int weight, ExecutionContext executionContext) {
-    // return SquirrelProvider.getInstance().newInstance(
-    // new TypeReference<MethodCallActionImpl<T, S, E, C>>() {},
-    // new Class[] { Method.class, int.class, ExecutionContext.class },
-    // new Object[] { method, weight, executionContext } );
-    // }
+    static function newMethodCallAction(string $method, int $weight): MethodCallActionImpl
+    {
+        return new MethodCallActionImpl($method, $weight);
+    }
 
     // static <T extends StateMachine<T, S, E, C>, S, E, C> MethodCallActionProxyImpl<T, S, E, C> newMethodCallActionProxy(
     // String methodName, ExecutionContext executionContext) {
@@ -105,12 +102,10 @@ class FSM
     // static <T extends StateMachine<T, S, E, C>, S, E, C> Actions<T, S, E, C> newActions() {
     // return SquirrelProvider.getInstance().newInstance(new TypeReference<Actions<T, S, E, C>>() {});
     // }
-
-    // static <T extends StateMachine<T, S, E, C>, S, E, C> TransitionResult<T, S, E, C> newResult(
-    // boolean accepted, ImmutableState<T, S, E, C> targetState, TransitionResult<T, S, E, C> parent) {
-    // return SquirrelProvider.getInstance().newInstance(new TypeReference<TransitionResult<T, S, E, C>>() {}).
-    // setAccepted(accepted).setTargetState(targetState).setParent(parent);
-    // }
+    public static function newResult(bool $accepted, ImmutableState $targetState, ?TransitionResult $parent): TransitionResult
+    {
+        return new TransitionResultImpl($accepted, $targetState, $parent);
+    }
 
     // static <C> Condition<C> newMvelCondition(String expression, MvelScriptManager scriptManager) {
     // return SquirrelProvider.getInstance().newInstance(new TypeReference<MvelConditionImpl<C>>() {},

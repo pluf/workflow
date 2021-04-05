@@ -1,19 +1,29 @@
 <?php
 namespace Pluf\Workflow\Imp;
 
-use Pluf\Workflow\ImmutableState;
-use Pluf\Workflow\StateMachine;
-use Pluf\Workflow\StateMachineData;
-use Pluf\Workflow\StateMachineConfiguration;
-use Pluf\Workflow\TransitionException;
+use Pluf\Workflow\ActionExecutionService;
 use Pluf\Workflow\ErrorCodes;
-use Pluf\Workflow\IllegalStateException;
-use Pluf\Workflow\StateMachineContext;
 use Pluf\Workflow\ImmutableLinkedState;
-use Pluf\Workflow\Visitor;
+use Pluf\Workflow\ImmutableState;
+use Pluf\Workflow\StateContext;
+use Pluf\Workflow\StateMachine;
+use Pluf\Workflow\StateMachineConfiguration;
+use Pluf\Workflow\StateMachineContext;
+use Pluf\Workflow\StateMachineData;
 use Pluf\Workflow\StateMachineDataReader;
 use Pluf\Workflow\StateMachineDataWriter;
-use Pluf\Workflow\SCXMLVisitor;
+use Pluf\Workflow\Visitor;
+use Pluf\Workflow\Exceptions\IllegalStateException;
+use Pluf\Workflow\Exceptions\TransitionException;
+use Pluf\Workflow\IO\SCXMLVisitor;
+use Pluf\Workflow\Imp\Events\StartEventImpl;
+use Pluf\Workflow\Imp\Events\TerminateEventImpl;
+use Pluf\Workflow\Imp\Events\TransitionBeginEventImpl;
+use Pluf\Workflow\Imp\Events\TransitionCompleteEventImpl;
+use Pluf\Workflow\Imp\Events\TransitionDeclinedEventImpl;
+use Pluf\Workflow\Imp\Events\TransitionEndEventImpl;
+use Pluf\Workflow\Imp\Events\TransitionExceptionEventImpl;
+use Throwable;
 
 /**
  * The Abstract state machine provide several extension ability to cover different extension granularity.
@@ -32,11 +42,14 @@ use Pluf\Workflow\SCXMLVisitor;
  */
 class AbstractStateMachine implements StateMachine
 {
+    use AssertTrait;
+    use EventHandlerTrait;
 
-    // private $logger;
-    private $executor;
+    private ?ActionExecutionService $executor = null;
 
     private ?StateMachineData $data = null;
+
+    private $implementation;
 
     private string $status = 'INITIALIZED';
 
@@ -50,12 +63,8 @@ class AbstractStateMachine implements StateMachine
 
     private $startEvent, $finishEvent, $terminateEvent;
 
-    // protected final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
-    // protected final Lock writeLock = rwLock.writeLock();
-    // protected final Lock readLock = rwLock.readLock();
-    private $scriptManager;
-
     // MvelScriptManager
+    private $scriptManager;
 
     // state machine options
     private bool $autoStartEnabled = true;
@@ -79,11 +88,13 @@ class AbstractStateMachine implements StateMachine
     private bool $entryPoint = false;
 
     // TransitionException
-    function prePostConstruct($initialStateId, $states, StateMachineConfiguration $configuration/* , Runnable $cb */) {
+    public function __construct($initialStateId, $states, StateMachineConfiguration $configuration)
+    {
         $this->data = FSM::newStateMachineData($states);
-        // $this->data.write().identifier(configuration.getIdProvider().get());
-        // $this->data.write().initialState(initialStateId);
-        // $this->data.write().currentState(null);
+        $this->data->write()->setIdentifier($configuration->getIdProvider()
+            ->get());
+        $this->data->write()->setInitialState($initialStateId);
+        $this->data->write()->setCurrentState(null);
 
         // retrieve options value from state machine configuration
         $this->autoStartEnabled = $configuration->isAutoStartEnabled();
@@ -91,23 +102,26 @@ class AbstractStateMachine implements StateMachine
         $this->dataIsolateEnabled = $configuration->isDataIsolateEnabled();
         $this->debugModeEnabled = $configuration->isDebugModeEnabled();
         $this->delegatorModeEnabled = $configuration->isDelegatorModeEnabled();
-        // cb.run();
+
+        $this->queuedEvents = new QueuedEvents();
+        $this->queuedTestEvents = new QueuedEvents();
     }
 
-    private function processEvent($event, $context, StateMachineData $originalData, $executionService, bool $DataIsolateEnabled): bool
+    private function processEvent($event, $context, StateMachineData $originalData, AbstractExecutionService $executionService, bool $DataIsolateEnabled): bool
     {
         $localData = $originalData;
-        $fromState = $localData->read()->currentRawState();
+        $fromState = $localData->read()->getCurrentRawState();
         $fromStateId = $fromState->getStateId();
         $toStateId = null;
         try {
+            // TODO: maso, useing named method insted of events (remove this one)
             $this->beforeTransitionBegin($fromStateId, $event, $context);
-            $this->fireEvent(new TransitionBeginEventImpl($fromStateId, $event, $context, $this->getThis()));
 
             if ($this->dataIsolateEnabled) {
                 // use local data to isolation transition data write
                 $localData = FSM::newStateMachineData($originalData->read()->originalStates());
-                $localData->dump(originalData . read());
+                $localData->dump($originalData->read());
+                // XXX: must use in container
             }
 
             $result = FSM::newResult(false, $fromState, null);
@@ -116,39 +130,32 @@ class AbstractStateMachine implements StateMachine
             $toStateId = $result->getTargetState()->getStateId();
 
             if ($result->isAccepted()) {
-                $executionService . execute();
-                $localData->write()->lastState($fromStateId);
-                $localData->write()->currentState($toStateId);
+                $executionService->execute();
+                $localData->write()->setLastState($fromStateId);
+                $localData->write()->setCurrentState($toStateId);
                 if ($this->dataIsolateEnabled) {
                     // import local data after transition accepted
                     $originalData->dump($localData->read());
                 }
-                $this->fireEvent(new TransitionCompleteEventImpl($fromStateId, $toStateId, $event, $context, $this->getThis()));
-                afterTransitionCompleted(fromStateId, getCurrentState(), event, context);
+                $this->fire('transitionComplete', new TransitionCompleteEventImpl($fromStateId, $toStateId, $event, $context, $this));
+                $this->afterTransitionCompleted($fromStateId, $this->getCurrentState(), $event, $context);
                 return true;
             } else {
-                $this->fireEvent(new TransitionDeclinedEventImpl($fromStateId, $event, $context, $this->getThis()));
-                afterTransitionDeclined(fromStateId, event, context);
+                $this->fire('TransitionDeclined', new TransitionDeclinedEventImpl($fromStateId, $event, $context, $this));
+                $this->afterTransitionDeclined($fromStateId, $event, $context);
             }
-        } catch (\Exception $e) {
+        } catch (Throwable $e) {
             // set state machine in error status first which means state machine cannot process event anymore
             // unless this exception has been resolved and state machine status set back to normal again.
             $this->setStatus('ERROR');
             // wrap any exception into transition exception
-            $this->lastException = ($e instanceof TransitionException) ? $e : new TransitionException($e, ErrorCodes::FSM_TRANSITION_ERROR, [
-                $fromStateId,
-                $toStateId,
-                $event,
-                $context,
-                "UNKNOWN",
-                $e->getMessage()
-            ]);
-            $this->fireEvent(new TransitionExceptionEventImpl($this->lastException, $fromStateId, $localData->read()
-                ->currentState(), $event, $context, $this->getThis()));
-            afterTransitionCausedException(fromStateId, toStateId, event, context);
+            $this->lastException = ($e instanceof TransitionException) ? $e : new TransitionException('Fail to execute the action', ErrorCodes::FSM_TRANSITION_ERROR, $e, $fromStateId, $toStateId, $event, $context, 'UNKNOWN');
+            $this->fire('transitionException', new TransitionExceptionEventImpl($this->lastException, $fromStateId, $localData->read()
+                ->getCurrentState(), $event, $context, $this));
+            $this->afterTransitionCausedException($fromStateId, $toStateId, $event, $context);
         } finally {
             $executionService->reset();
-            $this->fireEvent(new TransitionEndEventImpl($fromStateId, $toStateId, $event, $context, $this->getThis()));
+            $this->fire('transitionEnd', new TransitionEndEventImpl($fromStateId, $toStateId, $event, $context, $this));
             $this->afterTransitionEnd($fromStateId, $this->getCurrentState(), $event, $context);
         }
         return false;
@@ -157,35 +164,30 @@ class AbstractStateMachine implements StateMachine
     private function processEvents(): void
     {
         if ($this->isIdle()) {
-            // writeLock.lock();
             $this->setStatus('BUSY');
             try {
                 $eventInfo = null;
                 $event = null;
                 $context = null;
                 while (($eventInfo = $this->queuedEvents->poll()) != null) {
-                    // // response to cancel operation
-                    // if(Thread.interrupted()) {
-                    // queuedEvents.clear();
-                    // break;
-                    // }
-                    $event = $eventInfo->first();
-                    $context = $eventInfo->second();
+                    // TODO: response to cancel operation
+                    $event = $eventInfo->first;
+                    $context = $eventInfo->second;
                     $this->processEvent($event, $context, $this->data, $this->executor, $this->dataIsolateEnabled);
                 }
-                $rawState = $this->data->read()->currentRawState();
+                $rawState = $this->data->read()->getCurrentRawState();
                 if ($this->autoTerminateEnabled && $rawState->isRootState() && $rawState->isFinalState()) {
                     $this->terminate($context);
                 }
             } finally {
-                if ($this->getStatus() == 'BUSY')
+                if ($this->getStatus() == 'BUSY') {
                     $this->setStatus('IDLE');
-                // writeLock.unlock();
+                }
             }
         }
     }
 
-    private function internalFire($event, $context, bool $insertAtFirst): void
+    private function internalFire($event, $context, bool $insertAtFirst = false): void
     {
         if ($this->getStatus() == 'INITIALIZED') {
             if ($this->autoStartEnabled) {
@@ -208,10 +210,21 @@ class AbstractStateMachine implements StateMachine
         $this->processEvents();
     }
 
-    private function isEntryPoint(): bool
+    public function isEntryPoint(): bool
     {
-        // NOTE: not usefule in PHP
         return $this->entryPoint;
+    }
+
+    /**
+     * This is an entry point
+     *
+     * @param bool $entryPoint
+     * @return self
+     */
+    public function setEntryPoint(bool $entryPoint = true): self
+    {
+        $this->entryPoint = $entryPoint;
+        return $this;
     }
 
     /**
@@ -222,11 +235,11 @@ class AbstractStateMachine implements StateMachine
         $this->queuedEvents->clear();
     }
 
-    public function fire($event, $context, bool $testEvent = false): void
+    public function fireEvent($event, $context = null, bool $insertAtFirst = false): void
     {
         $isEntryPoint = $this->isEntryPoint();
         if ($isEntryPoint) {
-            StateMachineContext::set($this->getThis());
+            StateMachineContext::set($this);
         } else if ($this->delegatorModeEnabled && StateMachineContext::currentInstance() != $this) {
             $currentInstance = StateMachineContext::currentInstance();
             $currentInstance->fire($event, $context);
@@ -253,17 +266,17 @@ class AbstractStateMachine implements StateMachine
      */
     public function untypedFire($event, $context)
     {
-        $this->fire($event, $context);
+        $this->fireEvent($event, $context);
+    }
+
+    public function fireImmediate($event, $context): void
+    {
+        $this->fireEvent($event, $context, true);
     }
 
     public function isRemoteMonitorEnabled(): bool
     {
         return $this->remoteMonitorEnabled;
-    }
-
-    public function fireImmediate($event, $context): void
-    {
-        $this->fire($event, $context, true);
     }
 
     private function internalTest($event, $context)
@@ -309,7 +322,7 @@ class AbstractStateMachine implements StateMachine
     {
         $isEntryPoint = $this->isEntryPoint();
         if ($isEntryPoint) {
-            StateMachineContext::set($this->getThis(), true);
+            StateMachineContext::set($this, true);
         }
         try {
             return $this->internalTest(event, context);
@@ -351,36 +364,50 @@ class AbstractStateMachine implements StateMachine
     protected function afterTransitionCausedException($from, $to, $event, $context)
     {
         $le = $this->getLastException();
-        if ($le->getTargetException() != null) {
-            $this->logger->error("Transition caused exception", $le->getTargetException());
-        }
-        throw $this->getLastException();
+        // if ($le->getTargetException() != null) {
+        // $this->logger->error("Transition caused exception", $le->getTargetException());
+        // }
+        throw $le;
     }
 
     protected function beforeTransitionBegin($from, $event, $context): void
-    {}
+    {
+        // TODO:
+
+        // +
+        $this->fire('transitionBegin', new TransitionBeginEventImpl($from, $event, $context, $this));
+    }
 
     protected function afterTransitionCompleted($from, $to, $event, $ontext): void
-    {}
+    {
+        // TODO: call registerd callables
+    }
 
     protected function afterTransitionEnd($from, $to, $event, $context): void
-    {}
+    {
+        // TODO: call registerd callables
+    }
 
     protected function afterTransitionDeclined($from, $event, $context): void
-    {}
+    {
+        // TODO: call registerd callables
+    }
 
     protected function beforeActionInvoked($from, $to, $event, $context): void
-    {}
+    {
+        // TODO: call registerd callables
+    }
 
     protected function afterActionInvoked($from, $to, $event, $context): void
-    {}
+    {
+        // TODO: call registerd callables
+    }
 
     private function resolveRawState(ImmutableState $rawState): ImmutableState
     {
         $resolvedRawState = $rawState;
         if ($resolvedRawState instanceof ImmutableLinkedState) {
-            $resolvedRawState = $rawState->getLinkedStateMachine($this->getThis())
-                ->getCurrentRawState();
+            $resolvedRawState = $rawState->getLinkedStateMachine($this)->getCurrentRawState();
         }
         return $resolvedRawState;
     }
@@ -457,12 +484,11 @@ class AbstractStateMachine implements StateMachine
     private function resolveState($state, $localData)
     {
         $resolvedState = $state;
-        $rawState = $localData->read()->rawStateFrom($resolvedState);
+        $rawState = $localData->read()->getRawStateFrom($resolvedState);
         if ($rawState instanceof ImmutableLinkedState) {
-            $resolvedState = $rawState->getLinkedStateMachine($this->getThis())
-                ->getCurrentState();
+            $resolvedState = $rawState->getLinkedStateMachine($this)->getCurrentState();
         }
-        return resolvedState;
+        return $resolvedState;
     }
 
     /**
@@ -473,7 +499,7 @@ class AbstractStateMachine implements StateMachine
     public function getCurrentState()
     {
         return $this->resolveState($this->data->read()
-            ->currentState(), $this->data);
+            ->getCurrentState(), $this->data);
     }
 
     /**
@@ -497,7 +523,15 @@ class AbstractStateMachine implements StateMachine
         return $this->data->read()->initialState();
     }
 
-    private function entryAll(ImmutableState $origin, $stateContext)
+    /**
+     * Finds the state and all other entries
+     *
+     * A state is entry if it is the parent of the current entry state
+     *
+     * @param ImmutableState $origin
+     * @param StateContext $stateContext
+     */
+    private function entryAll(ImmutableState $origin, ?StateContext $stateContext)
     {
         $stack = [];
 
@@ -506,7 +540,7 @@ class AbstractStateMachine implements StateMachine
             array_push($stack, $state);
             $state = $state->getParentState();
         }
-        while (! isEmpty($stack)) {
+        while (! empty($stack)) {
             $state = array_pop($stack);
             $state->entry($stateContext);
         }
@@ -529,7 +563,7 @@ class AbstractStateMachine implements StateMachine
         $this->processEvents();
     }
 
-    private function internalStart($context, $localData, $executionService)
+    private function internalStart($context, StateMachineData $localData, ActionExecutionService $executionService)
     {
         $initialRawState = $localData->read()->getInitialRawState();
         $stateContext = FSM::newStateContext($this, $localData, $initialRawState, $this->getStartEvent(), $context, null, $executionService);
@@ -537,11 +571,16 @@ class AbstractStateMachine implements StateMachine
         $this->entryAll($initialRawState, $stateContext);
         $historyState = $initialRawState->enterByHistory($stateContext);
         $executionService->execute();
-        $localData->write()->currentState($historyState->getStateId());
-        $localData->write()->startContext($context);
-        $this->fireEvent(new StartEventImpl($this->getThis()));
+        $localData->write()->setCurrentState($historyState->getStateId());
+        $localData->write()->setStartContext($context);
+        $this->fire('start', new StartEventImpl($this));
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::isStarted()
+     */
     public function isStarted(): bool
     {
         return $this->getStatus() == 'IDLE' || $this->getStatus() == 'BUSY';
@@ -618,13 +657,13 @@ class AbstractStateMachine implements StateMachine
             return;
         }
 
-        $stateContext = FSM::newStateContext($this, $this->data, $this->data->read()->currentRawState(), $this->getTerminateEvent(), $context, null, $this->executor);
+        $stateContext = FSM::newStateContext($this, $this->data, $this->data->read()->getCurrentRawState(), $this->getTerminateEvent(), $context, null, $this->executor);
         $this->exitAll($this->data->read()
-            ->currentRawState(), $stateContext);
+            ->getCurrentRawState(), $stateContext);
         $this->executor->execute();
 
         $this->setStatus('TERMINATED');
-        $this->fireEvent(new TerminateEventImpl($this->getThis()));
+        $this->fire('terminate', new TerminateEventImpl($this));
     }
 
     private function exitAll(ImmutableState $current, $stateContext)
@@ -634,12 +673,6 @@ class AbstractStateMachine implements StateMachine
             $state->exit($stateContext);
             $state = $state->getParentState();
         }
-    }
-
-    // TODO: replace with $this
-    public function getThis()
-    {
-        return $this;
     }
 
     public function accept(Visitor $visitor): void
@@ -653,36 +686,81 @@ class AbstractStateMachine implements StateMachine
         $visitor->visitOnExit($this);
     }
 
-    function setTypeOfStateMachine($stateMachineType)
+    /**
+     * Set type of state machine
+     *
+     * State machine type is a class that implements all functional parts of FSM.
+     *
+     * @param string $stateMachineType
+     *            to use
+     */
+    public function setTypeOfStateMachine($stateMachineType): self
     {
-        $this->data->write()->typeOfStateMachine($stateMachineType);
+        $this->data->write()->setTypeOfStateMachine($stateMachineType);
+        return $this;
     }
 
-    function setTypeOfState($stateType)
+    /**
+     * Sets type of states.
+     *
+     * @param string $stateType
+     * @return self
+     */
+    public function setTypeOfState(string $stateType): self
     {
-        $this->data->write()->typeOfState($stateType);
+        $this->data->write()->setTypeOfState($stateType);
+        return $this;
     }
 
-    function setTypeOfEvent($eventType)
+    /**
+     * Sets type of events
+     *
+     * @param string $eventType
+     * @return self
+     */
+    public function setTypeOfEvent(string $eventType): self
     {
-        $this->data->write()->typeOfEvent($eventType);
+        $this->data->write()->setTypeOfEvent($eventType);
+        return $this;
     }
 
-    function setTypeOfContext($contextType)
+    /**
+     * Sets type of context
+     *
+     * @deprecated context must pass throw the DI
+     * @param string $contextType
+     * @return self
+     */
+    public function setTypeOfContext(?string $contextType): self
     {
-        $this->data->write()->typeOfContext($contextType);
+        $this->data->write()->setTypeOfContext($contextType);
+        return $this;
     }
 
-    function setScriptManager($scriptManager)
+    /**
+     * Sets script manager
+     *
+     * @param mixed $scriptManager
+     * @return self
+     */
+    public function setScriptManager($scriptManager): self
     {
-        $this->checkState($this->scriptManager == null);
+        $this->assertEmpty($this->scriptManager);
         $this->scriptManager = $scriptManager;
+        return $this;
     }
 
-    function setStartEvent($startEvent)
+    /**
+     * Sets start event
+     *
+     * @param mixed $startEvent
+     * @return self
+     */
+    public function setStartEvent($startEvent): self
     {
-        $this->checkState($this->startEvent == null);
+        $this->assertEmpty($this->startEvent);
         $this->startEvent = $startEvent;
+        return $this;
     }
 
     function getStartEvent()
@@ -690,10 +768,17 @@ class AbstractStateMachine implements StateMachine
         return $this->startEvent;
     }
 
-    function setTerminateEvent($terminateEvent)
+    /**
+     * Sets termination event
+     *
+     * @param mixed $terminateEvent
+     * @return self
+     */
+    public function setTerminateEvent($terminateEvent): self
     {
-        $this->checkState($this->terminateEvent == null);
+        $this->assertEmpty($this->terminateEvent);
         $this->terminateEvent = $terminateEvent;
+        return $this;
     }
 
     function getTerminateEvent()
@@ -701,10 +786,17 @@ class AbstractStateMachine implements StateMachine
         return $this->terminateEvent;
     }
 
-    function setFinishEvent($finishEvent)
+    /**
+     * Sets finis events
+     *
+     * @param mixed $finishEvent
+     * @return self
+     */
+    public function setFinishEvent($finishEvent): self
     {
-        $this->checkState($this->finishEvent == null);
+        $this->assertEmpty($this->finishEvent);
         $this->finishEvent = $finishEvent;
+        return $this;
     }
 
     function getFinishEvent()
@@ -712,62 +804,16 @@ class AbstractStateMachine implements StateMachine
         return $this->finishEvent;
     }
 
-    function setExtraParamTypes($extraParamTypes)
+    /**
+     *
+     * @deprecated not case in PHP
+     * @param mixed $extraParamTypes
+     */
+    function setExtraParamTypes($extraParamTypes): self
     {
-        $this->checkState($this->extraParamTypes == null);
+        $this->assertEmpty($this->extraParamTypes);
         $this->extraParamTypes = $extraParamTypes;
-    }
-
-    /**
-     *
-     * {@inheritdoc}
-     * @see \Pluf\Workflow\StateMachine::dumpSavedData()
-     */
-    public function dumpSavedData(): StateMachineDataReader
-    {
-        $savedData = FSM::newStateMachineData($this->data->read()->originalStates());
-        $savedData->dump($this->data->read());
-
-        // process linked state if any
-        $this->saveLinkedStateData($this->data->read(), $savedData . write());
-        return $savedData->read();
-    }
-
-    private function saveLinkedStateData(StateMachineDataReader $src, StateMachineDataWriter $target)
-    {
-        dumpLinkedStateFor(src . currentRawState(), target);
-        // dumpLinkedStateFor(src.lastRawState(), target);
-        // TODO-hhe: dump linked state info for last active child state
-        // TODO-hhe: dump linked state info for parallel state
-    }
-
-    private function dumpLinkedStateFor(ImmutableState $rawState, StateMachineDataWriter $target)
-    {
-        if ($rawState != null && $rawState instanceof ImmutableLinkedState) {
-            $linkStateData = $rawState->getLinkedStateMachine($this)->dumpSavedData();
-            $target->linkedStateDataOn($rawState->getStateId(), $linkStateData);
-        }
-    }
-
-    /**
-     *
-     * {@inheritdoc}
-     * @see \Pluf\Workflow\StateMachine::loadSavedData()
-     */
-    public function loadSavedData(StateMachineDataReader $savedData): bool
-    {
-        // Preconditions.checkNotNull(savedData, "Saved data cannot be null");
-        $this->data->dump($savedData);
-        // process linked state if any
-        forEach ($savedData->linkedStates() as $linkedState) {
-            $linkedStateData = $savedData->linkedStateDataOf($linkedState);
-            $rawState = $this->data->read()->rawStateFrom($linkedState);
-            if ($linkedStateData != null && $rawState instanceof ImmutableLinkedState) {
-                $rawState->getLinkedStateMachine($this)->loadSavedData($linkedStateData);
-            }
-        }
-        $this->setStatus('IDLE');
-        return true;
+        return $this;
     }
 
     public function isContextSensitive(): bool
@@ -841,55 +887,43 @@ class AbstractStateMachine implements StateMachine
     }
 
     /**
+     * Sets the action executer
      *
-     * {@inheritdoc}
-     * @see \Pluf\Workflow\StateMachine::getDescription()
+     * @param ActionExecutionService $actionExecutionService
+     * @return self
      */
-    public function getDescription(): string
+    public function setActionExecutionService(ActionExecutionService $actionExecutionService): self
     {
-        $description = '';
-        $description .= "id=\"" . $this->getIdentifier() . "\" ";
-        $description .= "fsm-type=\"" . $this::class . "\" ";
-        $description .= "state-type=\"" . $this->typeOfState() . "\" ";
-        $description .= "event-type=\"" . $this->typeOfEvent() . "\" ";
-        $description .= "context-type=\"" . $this->typeOfContext() . "\" ";
-
-        // Converter<E> eventConverter = ConverterProvider.INSTANCE.getConverter(typeOfEvent());
-        // if(getStartEvent()!=null) {
-        // builder.append("start-event=\"");
-        // builder.append(eventConverter.convertToString(getStartEvent()));
-        // builder.append("\" ");
-        // }
-        // if(getTerminateEvent()!=null) {
-        // builder.append("terminate-event=\"");
-        // builder.append(eventConverter.convertToString(getTerminateEvent()));
-        // builder.append("\" ");
-        // }
-        // if(getFinishEvent()!=null) {
-        // builder.append("finish-event=\"");
-        // builder.append(eventConverter.convertToString(getFinishEvent()));
-        // builder.append("\" ");
-        // }
-        // builder.append("context-insensitive=\"").append(isContextSensitive()).append("\" ");
-
-        // if(extraParamTypes!=null && extraParamTypes.length>0) {
-        // builder.append("extra-parameters=\"[");
-        // for(int i=0; i<extraParamTypes.length; ++i) {
-        // if(i>0) builder.append(",");
-        // builder.append(extraParamTypes[i].getName());
-        // }
-        // builder.append("]\" ");
-        // }
-        return $description;
+        $this->assertEmpty($this->executor, 'Trying to set executor twic');
+        $this->executor = $actionExecutionService;
+        return $this;
     }
 
-    public function exportXMLDefinition(bool $beautifyXml): string
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::getImplementation()
+     */
+    public function getImplementation()
     {
-        // SquirrelProvider.getInstance().newInstance(SCXMLVisitor.class);
-        // TODO: get from DI
-        $visitor = new SCXMLVisitor();
-        $this->accept($visitor);
-        return $visitor->getScxml($beautifyXml);
+        if (! isset($this->implementation)) {
+            // New instance
+            $type = $this->data->read()->getTypeOfStateMachine();
+            // TODO: use invoker to instance the state machine
+            $this->implementation = new $type();
+        }
+        return $this->implementation;
+    }
+
+    /**
+     * Sets state machine implementation
+     *
+     * @param mixed $stateMachineImplementation
+     */
+    public function setImplementation($stateMachineImplementation)
+    {
+        $this->assertEmpty($this->implementation, 'Trying to set implimentation twic');
+        $this->implementation = $stateMachineImplementation;
     }
 
     // private interface DeclarativeListener {
@@ -946,6 +980,119 @@ class AbstractStateMachine implements StateMachine
     // implementedInterfaces, invocationHandler);
     // return proxyListener;
     // }
+
+    // ------------------------------------------------------------------------------
+    // IO
+    // ------------------------------------------------------------------------------
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::getDescription()
+     */
+    public function getDescription(): string
+    {
+        $read = $this->data->read();
+        $description = '';
+        $description .= "id=\"" . $read->identifier() . "\" ";
+        $description .= "fsm-type=\"" . $read->getTypeOfStateMachine() . "\" ";
+        $description .= "state-type=\"" . $read->getTypeOfState() . "\" ";
+        $description .= "event-type=\"" . $read->getTypeOfEvent() . "\" ";
+        $description .= "context-type=\"" . $read->getTypeOfContext() . "\" ";
+
+        // Converter<E> eventConverter = ConverterProvider.INSTANCE.getConverter(typeOfEvent());
+        // if(getStartEvent()!=null) {
+        // builder.append("start-event=\"");
+        // builder.append(eventConverter.convertToString(getStartEvent()));
+        // builder.append("\" ");
+        // }
+        // if(getTerminateEvent()!=null) {
+        // builder.append("terminate-event=\"");
+        // builder.append(eventConverter.convertToString(getTerminateEvent()));
+        // builder.append("\" ");
+        // }
+        // if(getFinishEvent()!=null) {
+        // builder.append("finish-event=\"");
+        // builder.append(eventConverter.convertToString(getFinishEvent()));
+        // builder.append("\" ");
+        // }
+        // builder.append("context-insensitive=\"").append(isContextSensitive()).append("\" ");
+
+        // if(extraParamTypes!=null && extraParamTypes.length>0) {
+        // builder.append("extra-parameters=\"[");
+        // for(int i=0; i<extraParamTypes.length; ++i) {
+        // if(i>0) builder.append(",");
+        // builder.append(extraParamTypes[i].getName());
+        // }
+        // builder.append("]\" ");
+        // }
+        return $description;
+    }
+
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::exportXMLDefinition()
+     */
+    public function exportXMLDefinition(bool $beautifyXml): string
+    {
+        // SquirrelProvider.getInstance().newInstance(SCXMLVisitor.class);
+        // TODO: get from DI
+        $visitor = new SCXMLVisitor();
+        $this->accept($visitor);
+        return $visitor->getScxml($beautifyXml);
+    }
+
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::dumpSavedData()
+     */
+    public function dumpSavedData(): StateMachineDataReader
+    {
+        $savedData = FSM::newStateMachineData($this->data->read()->originalStates());
+        $savedData->dump($this->data->read());
+
+        // process linked state if any
+        $this->saveLinkedStateData($this->data->read(), $savedData->write());
+        return $savedData->read();
+    }
+
+    private function saveLinkedStateData(StateMachineDataReader $src, StateMachineDataWriter $target)
+    {
+        $this->dumpLinkedStateFor($src->currentRawState(), $target);
+        // dumpLinkedStateFor(src.lastRawState(), target);
+        // TODO-hhe: dump linked state info for last active child state
+        // TODO-hhe: dump linked state info for parallel state
+    }
+
+    private function dumpLinkedStateFor(ImmutableState $rawState, StateMachineDataWriter $target)
+    {
+        if ($rawState != null && $rawState instanceof ImmutableLinkedState) {
+            $linkStateData = $rawState->getLinkedStateMachine($this)->dumpSavedData();
+            $target->linkedStateDataOn($rawState->getStateId(), $linkStateData);
+        }
+    }
+
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::loadSavedData()
+     */
+    public function loadSavedData(StateMachineDataReader $savedData): bool
+    {
+        // Preconditions.checkNotNull(savedData, "Saved data cannot be null");
+        $this->data->dump($savedData);
+        // process linked state if any
+        forEach ($savedData->linkedStates() as $linkedState) {
+            $linkedStateData = $savedData->linkedStateDataOf($linkedState);
+            $rawState = $this->data->read()->rawStateFrom($linkedState);
+            if ($linkedStateData != null && $rawState instanceof ImmutableLinkedState) {
+                $rawState->getLinkedStateMachine($this)->loadSavedData($linkedStateData);
+            }
+        }
+        $this->setStatus('IDLE');
+        return true;
+    }
 }
 
 

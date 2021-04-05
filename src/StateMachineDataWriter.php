@@ -108,7 +108,7 @@ interface StateMachineDataWriter
      * @param
      *            contextClass
      */
-    function setTypeOfContext(string $contextClass): void;
+    function setTypeOfContext(?string $contextClass): void;
 
     /**
      * Write linked state data on specified linked state

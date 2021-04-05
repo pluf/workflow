@@ -5,8 +5,14 @@ use Pluf\Workflow\Condition;
 
 class NotCondition implements Condition
 {
-    public function __construct(
-        public Condition $b){ }
+
+    public Condition $b;
+
+    public function __construct(Condition $b)
+    {
+        $this->b = $b;
+    }
+
     public function name(): string
     {
         return 'Not';
@@ -14,8 +20,8 @@ class NotCondition implements Condition
 
     public function isSatisfied($context): bool
     {
-        return !$this->b->isSatisfied($context);
+        return ! $this->b->isSatisfied($context);
     }
-
 }
 
+ 

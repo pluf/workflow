@@ -5,7 +5,7 @@ use Attribute;
 use Pluf\Workflow\StateCompositeType;
 use Pluf\Workflow\HistoryType;
 
-#[Attribute]
+#[Attribute(Attribute::TARGET_CLASS)]
 class State
 {
     public function __construct(

@@ -1,12 +1,12 @@
 <?php
 namespace Pluf\Workflow\Imp;
 
-use Pluf\Workflow\MutableTransition;
-use Pluf\Workflow\ImmutableState;
-use Pluf\Workflow\TransitionType;
-use Pluf\Workflow\StateContext;
 use Pluf\Workflow\Condition;
 use Pluf\Workflow\Conditions;
+use Pluf\Workflow\ImmutableState;
+use Pluf\Workflow\MutableTransition;
+use Pluf\Workflow\StateContext;
+use Pluf\Workflow\TransitionType;
 use Pluf\Workflow\Visitor;
 
 class TransitionImpl implements MutableTransition
@@ -258,10 +258,10 @@ class TransitionImpl implements MutableTransition
             // Handles 5a. after traversing the hierarchy until a common ancestor if found.
             $source->exit($stateContext);
             $this->transit($stateContext);
-            $this->target->entry($stateContext);
+            $this->targetState->entry($stateContext);
         } else {
             // traverses the hierarchy until one of the above scenarios is met.
-            if ($source->getLevel() > $target . getLevel()) {
+            if ($source->getLevel() > $target->getLevel()) {
                 // Handles 3.
                 // Handles 5b.
                 $source->exit($stateContext);
@@ -368,7 +368,7 @@ class TransitionImpl implements MutableTransition
 
     public function __toString()
     {
-        return $this->sourceState . "-[" . $this->event . ", " . $this->condition . name() . ", " . $this->priority . ", " . $this->type . "]->" . $this->targetState;
+        return $this->sourceState . "-[" . $this->event . ", " . $this->condition->name() . ", " . $this->priority . ", " . $this->type . "]->" . $this->targetState;
     }
 
     /**

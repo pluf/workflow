@@ -30,7 +30,7 @@ class QueuedEvents
     public function add($event): self
     {
         array_unshift($this->evetns, $event);
-        return this;
+        return $this;
     }
 
     public function remove()

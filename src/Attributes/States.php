@@ -8,7 +8,7 @@ use Attribute;
  * 
  * NOTE: in PHP8 is not possible to use new in attributes so do not use in attributes
  */
-#[Attribute]
+#[Attribute(Attribute::TARGET_CLASS)]
 class States
 {
     /**

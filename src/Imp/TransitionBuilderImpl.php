@@ -1,15 +1,15 @@
 <?php
 namespace Pluf\Workflow\Imp;
 
-use Pluf\Workflow\Builder\ExternalTransitionBuilder;
-use Pluf\Workflow\Builder\InternalTransitionBuilder;
-use Pluf\Workflow\Builder\LocalTransitionBuilder;
-use Pluf\Workflow\Builder\From;
-use Pluf\Workflow\Builder\To;
-use Pluf\Workflow\Builder\On;
-use Pluf\Workflow\Builder\When;
 use Pluf\Workflow\MutableState;
 use Pluf\Workflow\MutableTransition;
+use Pluf\Workflow\Builder\ExternalTransitionBuilder;
+use Pluf\Workflow\Builder\From;
+use Pluf\Workflow\Builder\InternalTransitionBuilder;
+use Pluf\Workflow\Builder\LocalTransitionBuilder;
+use Pluf\Workflow\Builder\On;
+use Pluf\Workflow\Builder\To;
+use Pluf\Workflow\Builder\When;
 
 class TransitionBuilderImpl implements ExternalTransitionBuilder, InternalTransitionBuilder, LocalTransitionBuilder, From, To, On
 {
@@ -27,8 +27,6 @@ class TransitionBuilderImpl implements ExternalTransitionBuilder, InternalTransi
     // see TransitionType INTERNAL, ..
     private int $priority = 0;
 
-    private $executionContext;
-
     /**
      * Crates new instance of the transition builder
      *
@@ -38,15 +36,12 @@ class TransitionBuilderImpl implements ExternalTransitionBuilder, InternalTransi
      *            transition type
      * @param int $priority
      *            of the transition
-     * @param mixed $executionContext
-     *            executer
      */
-    public function __construct($states, string $transitionType, int $priority = 0, $executionContext = null)
+    public function __construct($states, string $transitionType, int $priority = 0)
     {
         $this->states = $states;
         $this->transitionType = $transitionType;
         $this->priority = $priority;
-        $this->executionContext = $executionContext;
     }
 
     /**
@@ -70,7 +65,7 @@ class TransitionBuilderImpl implements ExternalTransitionBuilder, InternalTransi
      */
     public function evalMvel(string $expression): void
     {
-        $action = FSM::newMvelAction($expression, $this->executionContext);
+        $action = FSM::newMvelAction($expression);
         $this->transition->addAction($action);
     }
 
@@ -81,7 +76,7 @@ class TransitionBuilderImpl implements ExternalTransitionBuilder, InternalTransi
      */
     public function callMethod(String $methodName): void
     {
-        $action = FSM::newMethodCallActionProxy($methodName, $this->executionContext);
+        $action = FSM::newMethodCallActionProxy($methodName);
         $this->transition->addAction($action);
     }
 
@@ -153,7 +148,7 @@ class TransitionBuilderImpl implements ExternalTransitionBuilder, InternalTransi
      */
     public function whenMvel(string $expression): When
     {
-        $cond = FSM::newMvelCondition($expression, $this->executionContext->getScriptManager());
+        $cond = FSM::newMvelCondition($expression);
         $this->transition->setCondition($cond);
         return $this;
     }

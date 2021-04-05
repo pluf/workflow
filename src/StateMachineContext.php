@@ -5,28 +5,33 @@ use function PHPUnit\Framework\isEmpty;
 
 /**
  * This is a stack of statemachin to execute hericicaly
- * 
- * @author maso
  *
+ * @author maso
+ *        
  */
 class StateMachineContext
 {
+
     private static $currentInstance;
+
     private static array $stack = [];
-    
-//     private bool $isTestEvent;
-    
-//     private static ThreadLocal<Stack<StateMachineContext>> contextContainer = new ThreadLocal<Stack<StateMachineContext>>() {
-//         protected Stack<StateMachineContext> initialValue() {
-//             return new Stack<StateMachineContext>();
-//         }
-//     };
-    
-    public function __construct(
-        private $stateMachine, 
-        private bool $testEvent = false) {    }
-    
-    
+
+    private $stateMachine;
+
+    private bool $testEvent = false;
+
+    /**
+     * Creates a new instance
+     * 
+     * @param StateMachine $stateMachine
+     * @param bool $testEvent
+     */
+    public function __construct(StateMachine $stateMachine, bool $testEvent = false)
+    {
+        $this->stateMachine = $stateMachine;
+        $this->testEvent = $testEvent;
+    }
+
     public static function set($instance, bool $testEvent = false)
     {
         if ($instance == null) {
@@ -37,14 +42,16 @@ class StateMachineContext
             array_push(self::$stack, $testEvent);
         }
     }
-    
-    public static function currentInstance() {
+
+    public static function currentInstance()
+    {
         return self::$currentInstance;
     }
-    
-    public static function isTestEvent() :bool{
-//         return contextContainer.get().size()>0  ? contextContainer.get().peek().isTestEvent : false;
-        if(isEmpty(self::$stack)){
+
+    public static function isTestEvent(): bool
+    {
+        // return contextContainer.get().size()>0 ? contextContainer.get().peek().isTestEvent : false;
+        if (isEmpty(self::$stack)) {
             return false;
         }
         $instance = end(self::$stack);

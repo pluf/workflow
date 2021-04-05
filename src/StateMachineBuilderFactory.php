@@ -2,6 +2,7 @@
 namespace Pluf\Workflow;
 
 use Pluf\Workflow\Imp\StateMachineBuilderImpl;
+use Pluf\Di\Container;
 
 /**
  * State machine builder factory to create the state machine builder.
@@ -26,13 +27,22 @@ class StateMachineBuilderFactory
      * @param mixed $container
      * @return UntypedStateMachineBuilder
      */
-    public static function create(?string $stateMachineClazz = null, ?string $stateClass = 'string', ?string $eventClass = 'string', ?string $contextClazz = null, array $extraConstParamTypes = [], $container = null): UntypedStateMachineBuilder
+    public static function create(?string $stateMachineClazz = null, 
+        ?string $stateClass = 'string', 
+        ?string $eventClass = 'string', 
+        ?string $contextClazz = null, 
+        array $extraConstParamTypes = [], 
+        ?Container $container = null): UntypedStateMachineBuilder
     {
         $builder = new StateMachineBuilderImpl();
+        if(!isset($container)){
+            $container = new Container();
+        }
         return $builder->setStateMachinClass($stateMachineClazz)
             ->setContainer($container)
             ->setStateType($stateClass)
             ->setEventType($eventClass)
-            ->setContextType($contextClazz);
+            ->setContextType($contextClazz)
+            ->setScanAnnotations(true);
     }
 }

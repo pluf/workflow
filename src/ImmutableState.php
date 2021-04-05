@@ -75,7 +75,7 @@ interface ImmutableState
      *            the state context.
      * @return ImmutableState the active state. (depends on this states<code>HistoryType</code>)
      */
-    function enterByHistory(/* StateContext<T, S, E, C> */ $stateContext): ImmutableState;
+    function enterByHistory(StateContext  $stateContext): ImmutableState;
 
     /**
      * Enters this state is deep mode: mode if there is one.
@@ -85,7 +85,7 @@ interface ImmutableState
      *            the event context.
      * @return ImmutableState the active state.
      */
-    function enterDeep(/* StateContext<T, S, E, C>  */$stateContext): ImmutableState;
+    function enterDeep(StateContext $stateContext): ImmutableState;
 
     /**
      * Enters this state is shallow mode: The entry action is executed and the
@@ -95,7 +95,7 @@ interface ImmutableState
      *            stateContext
      * @return ImmutableState child state entered by shadow
      */
-    function enterShallow(/* StateContext<T, S, E, C>  */$stateContext): ImmutableState;
+    function enterShallow(StateContext $stateContext): ImmutableState;
 
     /**
      * Exit state with state context
@@ -103,13 +103,13 @@ interface ImmutableState
      * @param
      *            stateContext
      */
-    function exit(/* StateContext<T, S, E, C>  */$stateContext): void;
+    function exit(StateContext $stateContext): void;
 
     /**
      *
      * @return parent state
      */
-    function getParentState(): ImmutableState;
+    function getParentState(): ?ImmutableState;
 
     /**
      *
@@ -135,7 +135,7 @@ interface ImmutableState
      * @param
      *            stateContext
      */
-    function internalFire(/* StateContext<T, S, E, C> */ $stateContext): void;
+    function internalFire(StateContext $stateContext): void;
 
     /**
      *

@@ -9,6 +9,7 @@ use ArrayObject;
 
 class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, StateMachineDataWriter
 {
+    use AssertTrait;
 
     // private static final Logger logger = LoggerFactory.getLogger(StateMachineDataImpl.class);
     private $currentState;
@@ -21,15 +22,15 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
 
     private $parallelStatesStore = [];
 
-    private string $stateMachineType;
+    private ?string $stateMachineType = null;
 
-    private string $stateType;
+    private ?string $stateType = null;
 
-    private string $eventType;
+    private ?string $eventType = null;
 
-    private string $contextType;
+    private ?string $contextType = null;
 
-    private String $identifier;
+    private ?string $identifier = null;
 
     private $startContext;
 
@@ -47,7 +48,7 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      * {@inheritdoc}
      * @see \Pluf\Workflow\StateMachineDataReader::getOriginalStates()
      */
-    public function getOriginalStates(): array
+    public function getOriginalStates(): ArrayObject
     {
         if ($this->states == null) {
             return [];
@@ -319,9 +320,9 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      * {@inheritdoc}
      * @see \Pluf\Workflow\StateMachineDataReader::getCurrentRawState()
      */
-    public function getCurrentRawState(): ImmutableState
+    public function getCurrentRawState(): ?ImmutableState
     {
-        return currentState != null ? rawStateFrom(currentState) : null;
+        return $this->currentState != null ? $this->getRawStateFrom($this->currentState) : null;
     }
 
     /**
@@ -345,7 +346,8 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
             return null;
         }
         $states = $this->getOriginalStates();
-        if (array_key_exists($stateId, $states)) {
+        // if (array_key_exists($stateId, $states)) {
+        if ($states->offsetExists($stateId)) {
             return $states[$stateId];
         }
         return null;
@@ -366,7 +368,7 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      * {@inheritdoc}
      * @see \Pluf\Workflow\StateMachineDataReader::getTypeOfStateMachine()
      */
-    public function getTypeOfStateMachine(): string
+    public function getTypeOfStateMachine(): ?string
     {
         return $this->stateMachineType;
     }
@@ -408,7 +410,7 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      */
     public function setTypeOfStateMachine(string $stateMachineType): void
     {
-        $this->checkState($this->stateMachineType == null);
+        $this->assertEmpty($this->stateMachineType, "State machine type is set before");
         $this->stateMachineType = $stateMachineType;
     }
 
@@ -419,7 +421,7 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      */
     public function setTypeOfState(string $stateType): void
     {
-        $this->checkState($this->stateType == null);
+        $this->assertEmpty($this->stateType, "State type is set before");
         $this->stateType = $stateType;
     }
 
@@ -430,7 +432,7 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      */
     public function setTypeOfEvent(string $eventType): void
     {
-        $this->checkState($this->eventType == null);
+        $this->assertEmpty($this->eventType, "Event type is set before");
         $this->eventType = $eventType;
     }
 
@@ -439,9 +441,9 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      * {@inheritdoc}
      * @see \Pluf\Workflow\StateMachineDataWriter::setTypeOfContext()
      */
-    public function setTypeOfContext(string $contextType): void
+    public function setTypeOfContext(?string $contextType): void
     {
-        $this->checkState($this->contextType == null);
+        $this->assertEmpty($this->contextType, "Context type is set before");
         $this->contextType = $contextType;
     }
 
@@ -452,7 +454,8 @@ class StateMachineDataImpl implements StateMachineData, StateMachineDataReader, 
      */
     public function getRawStates(): array
     {
-        return array_values($this->getOriginalStates());
+        // return array_values($this->getOriginalStates());
+        return $this->states->getArrayCopy();
     }
 
     /**

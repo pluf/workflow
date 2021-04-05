@@ -230,12 +230,12 @@ interface StateMachineBuilder
      * @param
      *            initialStateId the id of state machine initial state
      * @param
-     *            configuration configuration for state machine
-     * @param
      *            extraParams other parameters for instantiate state machine, a map to use in instance
      * @return StateMachine new state machine
+     *        
+     * @deprecated use build insted
      */
-    function newStateMachine($initialStateId,  ?StateMachineConfiguration $configuration = null, array $extraParams = null) : StateMachine;
+    function build($initialStateId, ?array $extraParams = null): StateMachine;
 
     /**
      * Set default state machine configuration for state machine instance created by this builder
@@ -243,5 +243,21 @@ interface StateMachineBuilder
      * @param
      *            configure state machine default configuration
      */
-    function setStateMachineConfiguration(StateMachineConfiguration $configure): void;
+    function setStateMachineConfiguration(StateMachineConfiguration $configure): self;
+
+    /**
+     * Enable annotations scaner for the builder
+     *
+     * @param bool $flag
+     * @return self the builder
+     */
+    function setScanAnnotations(bool $flag): self;
+
+    /**
+     * Sets execution service
+     *
+     * @param ActionExecutionService $actionExecutionService
+     * @return self
+     */
+    function setActionExecutionService(ActionExecutionService $actionExecutionService): self;
 }

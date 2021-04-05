@@ -8,64 +8,116 @@ use Pluf\Workflow\StateMachine;
 use Pluf\Workflow\StateMachineData;
 use Pluf\Workflow\TransitionResult;
 
+/**
+ * State context implementation
+ *
+ * @author maso
+ *        
+ */
 class StateContextImpl implements StateContext
 {
 
-    private StateMachine $stateMachine;
+    public StateMachine $stateMachine;
 
-    private StateMachineData $stateMachineData;
+    public StateMachineData $stateMachineData;
 
-    private ImmutableState $sourceState;
+    public ImmutableState $sourceState;
 
-    private $context;
+    public $context;
 
-    private $event;
+    public $event;
 
-    private ?TransitionResult $result;
+    public ?TransitionResult $result;
 
-    private ActionExecutionService $executor;
+    public ActionExecutionService $executor;
 
-    public function __construct(StateMachine $stateMachine, StateMachineData $stateMachineData, ?ImmutableState $sourceState, $event, $context, ?TransitionResult $result, ActionExecutionService $executor)
+    /**
+     * Creates a new state context
+     *
+     * @param StateMachine $stateMachine
+     * @param StateMachineData $stateMachineData
+     * @param ImmutableState $sourceState
+     * @param mixed $event
+     * @param mixed $context
+     * @param TransitionResult $result
+     * @param ActionExecutionService $executor
+     */
+    public function __construct(StateMachine $stateMachine, StateMachineData $stateMachineData, ?ImmutableState $sourceState, $event, $context = null, ?TransitionResult $transitionResult, ActionExecutionService $actionExecutionService)
     {
         $this->stateMachine = $stateMachine;
         $this->stateMachineData = $stateMachineData;
         $this->sourceState = $sourceState;
         $this->event = $event;
         $this->context = $context;
-        $this->result = $result;
-        $this->executor = $executor;
+        $this->result = $transitionResult;
+        $this->executor = $actionExecutionService;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateContext::getStateMachine()
+     */
     public function getStateMachine(): StateMachine
     {
         return $this->stateMachine;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateContext::getSourceState()
+     */
     public function getSourceState(): ImmutableState
     {
         return $this->sourceState;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateContext::getContext()
+     */
     public function getContext()
     {
         return $this->context;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateContext::getEvent()
+     */
     public function getEvent()
     {
         return $this->event;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateContext::getResult()
+     */
     public function getResult(): TransitionResult
     {
         return $this->result;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateContext::getExecutor()
+     */
     public function getExecutor(): ActionExecutionService
     {
         return $this->executor;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateContext::getStateMachineData()
+     */
     public function getStateMachineData(): StateMachineData
     {
         return $this->stateMachineData;

@@ -2,19 +2,18 @@
 namespace Pluf\Workflow\Imp;
 
 use Pluf\Workflow\HistoryType;
-use Pluf\Workflow\MutableState;
-use Pluf\Workflow\StateCompositeType;
 use Pluf\Workflow\ImmutableState;
-use Pluf\Workflow\Visitor;
-use Pluf\Workflow\IllegalStateException;
-use Pluf\Workflow\IllegalArgumentException;
-use Pluf\Workflow\UnsupportedOperationException;
 use Pluf\Workflow\ImmutableTransition;
-use Pluf\Workflow\StateMachineDataReader;
-use RuntimeException;
+use Pluf\Workflow\MutableState;
 use Pluf\Workflow\MutableTransition;
+use Pluf\Workflow\StateCompositeType;
 use Pluf\Workflow\StateContext;
+use Pluf\Workflow\StateMachineDataReader;
+use Pluf\Workflow\Visitor;
 use Pluf\Workflow\Conditions\Never;
+use Pluf\Workflow\Exceptions\IllegalArgumentException;
+use Pluf\Workflow\Exceptions\IllegalStateException;
+use Pluf\Workflow\Exceptions\UnsupportedOperationException;
 
 class StateImpl implements MutableState
 {
@@ -22,9 +21,9 @@ class StateImpl implements MutableState
     // private static final Logger logger = LoggerFactory.getLogger(StateImpl.class);
     protected $stateId;
 
-    protected $entryActions;
+    protected array $entryActions = [];
 
-    protected $exitActions;
+    protected array $exitActions = [];
 
     private array $transitions = [];
 
@@ -46,7 +45,7 @@ class StateImpl implements MutableState
     /**
      * The HistoryType of this state.
      */
-    private $historyType = HistoryType::NONE;
+    private string $historyType = HistoryType::NONE;
 
     /**
      * The level of this state within the state hierarchy [1..maxLevel].
@@ -110,7 +109,11 @@ class StateImpl implements MutableState
      */
     public function getAllTransitions(): array
     {
-        return array_values($this->transitions);
+        $result = [];
+        foreach ($this->transitions as $list) {
+            $result = array_merge($result, $list);
+        }
+        return $result;
     }
 
     /**
@@ -118,10 +121,10 @@ class StateImpl implements MutableState
      * {@inheritdoc}
      * @see \Pluf\Workflow\ImmutableState::getTransitions()
      */
-    public function getTransitions($event = null): array
+    public function getTransitions($event): array
     {
-        if (! isset($event)) {
-            return $this->transitions;
+        if (! array_key_exists($event, $this->transitions)) {
+            return [];
         }
         return $this->transitions[$event];
     }
@@ -148,13 +151,11 @@ class StateImpl implements MutableState
      */
     public function prioritizeTransitions(): void
     {
-//         foreach ($this->transitions as $key => $trans) {
-//             var_dump(is_array($trans));
-            usort($this->transitions, function ($a, $b) {
+        foreach ($this->transitions as $trans) {
+            usort($trans, function ($a, $b) {
                 return $a->priority - $b->priority;
             });
-//             $this->transitions[$key] = $trans;
-//         }
+        }
     }
 
     /**
@@ -164,25 +165,27 @@ class StateImpl implements MutableState
      */
     public function entry(StateContext $stateContext): void
     {
-        $stateContext->getExecutor()->begin("STATE_ENTRY__" + $this->getStateId());
-        $actions = $this->getEntryActions();
+        $stateContext->getExecutor()->begin("STATE_ENTRY__" . $this->stateId);
+        $actions = $this->entryActions;
+        $event = $stateContext->getEvent();
+        $context = $stateContext->getContext();
+        $stateMachine = $stateContext->getStateMachine();
+
         foreach ($actions as $entryAction) {
-            $stateContext->getExecutor()->defer($entryAction, null, $this->getStateId(), $stateContext->getEvent(), $stateContext->getContext(), $stateContext->getStateMachine()
-                ->getThis());
+            $stateContext->getExecutor()->defer($entryAction, null, $this->stateId, $event, $context, $stateMachine);
         }
 
         if ($this->isParallelState()) {
             // When a parallel state group is entered, all its child states will be simultaneously entered.
-            $states = $this->getChildStates();
+            $states = $this->childStates;
             foreach ($states as $parallelState) {
                 $parallelState->entry($stateContext);
                 $subState = $parallelState->enterByHistory($stateContext);
                 $stateContext->getStateMachineData()
                     ->write()
-                    ->subStateFor($this->getStateId(), $subState->getStateId());
+                    ->setSubStateFor($this->stateId, $subState->getStateId());
             }
         }
-        // logger.debug("State \""+getStateId()+"\" entry.");
     }
 
     /**
@@ -190,7 +193,7 @@ class StateImpl implements MutableState
      * {@inheritdoc}
      * @see \Pluf\Workflow\ImmutableState::exit()
      */
-    public function exit($stateContext): void
+    public function exit(StateContext $stateContext): void
     {
         if ($this->isParallelState()) {
             $subStates = $this->getSubStatesOn($this, $stateContext->getStateMachineData()
@@ -207,7 +210,7 @@ class StateImpl implements MutableState
                 ->removeSubStatesOn($this->getStateId());
         }
 
-        if ($this - isFinalState()) {
+        if ($this->isFinalState()) {
             return;
         }
 
@@ -254,7 +257,7 @@ class StateImpl implements MutableState
      * {@inheritdoc}
      * @see \Pluf\Workflow\ImmutableState::getParentState()
      */
-    public function getParentState(): ImmutableState
+    public function getParentState(): ?ImmutableState
     {
         return $this->parentState;
     }
@@ -286,7 +289,7 @@ class StateImpl implements MutableState
      */
     public function setParentState(MutableState $parent): void
     {
-        if ($this == parent) {
+        if ($this == $parent) {
             throw new IllegalArgumentException("parent state cannot be state itself.");
         }
         if ($this->parentState == null) {
@@ -314,11 +317,11 @@ class StateImpl implements MutableState
      */
     public function setInitialState(MutableState $childInitialState): void
     {
-        if (isParallelState()) {
-            logger . warn("Ignoring attempt to set initial state of parallel state group.");
+        if ($this->isParallelState()) {
+            // logger . warn("Ignoring attempt to set initial state of parallel state group.");
             return;
         }
-        if (this . childInitialState == null) {
+        if ($this->childInitialState == null) {
             $this->childInitialState = $childInitialState;
         } else {
             throw new UnsupportedOperationException("Cannot change child initial state.");
@@ -332,19 +335,19 @@ class StateImpl implements MutableState
      */
     public function enterByHistory($stateContext): ImmutableState
     {
-        if (isFinalState() || isParallelState()) // no historical info
+        if ($this->finalState || $this->isParallelState()) // no historical info
             return this;
 
         $result = null;
-        switch (this . historyType) {
-            case NONE:
-                $result = enterHistoryNone($stateContext);
+        switch ($this->historyType) {
+            case HistoryType::NONE:
+                $result = $this->enterHistoryNone($stateContext);
                 break;
-            case SHALLOW:
-                $result = enterHistoryShallow($stateContext);
+            case HistoryType::SHALLOW:
+                $result = $this->enterHistoryShallow($stateContext);
                 break;
-            case DEEP:
-                $result = enterHistoryDeep($stateContext);
+            case HistoryType::DEEP:
+                $result = $this->enterHistoryDeep($stateContext);
                 break;
             default:
                 throw new IllegalArgumentException("Unknown HistoryType : " . $this->historyType);
@@ -416,7 +419,7 @@ class StateImpl implements MutableState
     {
         $lastActiveState = $this->getLastActiveChildStateOf($this, $stateContext->getStateMachineData()
             ->read());
-        return $lastActiveState != null ? $lastActiveState . enterDeep($stateContext) : this;
+        return $lastActiveState != null ? $lastActiveState->enterDeep($stateContext) : $this;
     }
 
     /**
@@ -426,10 +429,17 @@ class StateImpl implements MutableState
      */
     public function addTransitionOn($event): MutableTransition
     {
+        // create transition
         $newTransition = FSM::newTransition();
         $newTransition->setSourceState($this);
         $newTransition->setEvent($event);
-        $this->transitions[$event] = $newTransition;
+        // add to list of transition
+        if (! array_key_exists($event, $this->transitions)) {
+            $this->transitions[$event] = [];
+        }
+        $this->transitions[$event][] = $newTransition;
+
+        // return the result
         return $newTransition;
     }
 
@@ -554,7 +564,7 @@ class StateImpl implements MutableState
             }
         }
 
-        $transitions = $this->getTransitions($stateContext->getEvent());
+        $transitions = $this->getTransitions($stateContext->event);
         foreach ($transitions as $transition) {
             $transition->internalFire($stateContext);
             if ($currentTransitionResult->isAccepted()) {
@@ -734,7 +744,7 @@ class StateImpl implements MutableState
      */
     public function isRegion(): bool
     {
-        return parentState != null && parentState . isParallelState();
+        return $this->parentState != null && $this->parentState->isParallelState();
     }
 
     /**
@@ -747,13 +757,13 @@ class StateImpl implements MutableState
         if ($this->isFinalState()) {
             if ($this->isParallelState()) {
                 throw new IllegalStateException("Final state cannot be parallel state.");
-            } else if (hasChildStates()) {
+            } else if ($this->hasChildStates()) {
                 throw new IllegalStateException("Final state cannot have child states.");
             }
         }
 
         // make sure that every event can only trigger one transition happen at one time
-        $allTransitions = array_values($this->transitions);
+        $allTransitions = $this->getAllTransitions();
         foreach ($allTransitions as $t) {
             $t->verify();
             $conflictTransition = $this->checkConflictTransitions($t, $allTransitions);
@@ -807,7 +817,7 @@ class StateImpl implements MutableState
 
     protected function getKey($stateMachine): string
     {
-        return $stateMachine->getIdentifier() + '@' + $this->getPath();
+        return $stateMachine->getIdentifier() . '@' . $this->getPath();
     }
 
     /**
@@ -821,7 +831,7 @@ class StateImpl implements MutableState
         if (isset($this->parentState)) {
             return $currentId;
         } else {
-            return $this->parentState->getPath() + "/" + $currentId;
+            return $this->parentState->getPath() . "/" . $currentId;
         }
     }
 
@@ -832,7 +842,7 @@ class StateImpl implements MutableState
      */
     public function isChildStateOf(ImmutableState $input): bool
     {
-        $curr = this;
+        $curr = $this;
         while ($curr->getLevel() > $input->getLevel()) {
             $curr = $curr->getParentState();
         }

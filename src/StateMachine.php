@@ -29,7 +29,7 @@ interface StateMachine
      * @param
      *            testEvent if the event is for test
      */
-    function fire($event, $context, bool $testEvent = false): void;
+    function fireEvent($event, $context = null, bool $testEvent = false): void;
 
     /**
      * Fires event with context immediately, if current state machine is busy, the next processing event
@@ -89,11 +89,11 @@ interface StateMachine
      */
     function getStatus(): string;
 
-//     /**
-//      *
-//      * @return type-safe state machine instance
-//      */
-//     function getThis();
+    // /**
+    // *
+    // * @return type-safe state machine instance
+    // */
+    // function getThis();
 
     /**
      *
@@ -170,8 +170,6 @@ interface StateMachine
 
     function getIdentifier(): string;
 
-    function getDescription(): string;
-
     function isRemoteMonitorEnabled(): bool;
 
     function isStarted(): bool;
@@ -180,14 +178,31 @@ interface StateMachine
 
     function isError(): bool;
 
+    /**
+     * Gets state machine implementation
+     *
+     * State machine use an object to find functions to perform transactions which is called implementation.
+     *
+     * @return object state machine implementation instance
+     */
+    function getImplementation();
+
     // ------------------------------------------------------------------------------
     // IO
     // ------------------------------------------------------------------------------
+    /**
+     * Convert state machine description into string
+     * 
+     * @deprecated use the IO utility
+     * @return string
+     */
+    function getDescription(): string;
     /**
      * Dump current state machine data.
      * This operation can only be done when state machine status is
      * {@link StateMachineStatus#IDLE}, otherwise null will be returned.
      *
+     * @deprecated use the IO utility
      * @return mixed dumped state machine data reader
      */
     function dumpSavedData();
@@ -197,12 +212,20 @@ interface StateMachine
      * The operation can only be done when state machine
      * status is {@link StateMachineStatus#INITIALIZED} or {@link StateMachineStatus#TERMINATED}.
      *
+     * @deprecated use the IO utility
      * @param
      *            savedData provided saved data
      * @return true if load saved data success otherwise false
      */
     function loadSavedData(StateMachineDataReader $savedData): bool;
 
+    /**
+     * Exports into xmls
+     *
+     * @deprecated use the IO utility
+     * @param bool $beautifyXml
+     * @return string
+     */
     function exportXMLDefinition(bool $beautifyXml): string;
 }
     

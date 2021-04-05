@@ -1,6 +1,8 @@
 <?php
 namespace Pluf\Workflow;
 
+use ArrayObject;
+
 interface StateMachineDataReader
 {
 
@@ -61,7 +63,7 @@ interface StateMachineDataReader
      *
      * @returnImmutableState  current raw state of state machine
      */
-    function getCurrentRawState(): ImmutableState;
+    function getCurrentRawState(): ?ImmutableState;
 
     /**
      *
@@ -91,10 +93,13 @@ interface StateMachineDataReader
     function getParallelStates(): array;
 
     /**
-     *
+     * The state machin implementation type
+     * 
+     * Only one class is considered as implementationtion. All functional part of a 
+     * state machine is implemented in a class.
      * @return string type of state machine
      */
-    function getTypeOfStateMachine(): string;
+    function getTypeOfStateMachine(): ?string;
 
     /**
      *
@@ -132,7 +137,7 @@ interface StateMachineDataReader
      */
     function getLinkedStates(): array;
 
-    function getOriginalStates(): array;
+    function getOriginalStates(): ArrayObject;
 
     function getLinkedStateDataOf($linkedState): StateMachineDataReader;
 }

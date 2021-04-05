@@ -2,7 +2,7 @@
 namespace Pluf\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Pluf\Tests\NoteBook\BookStates;
+use Pluf\Tests\Atm\ATMStateMachineAnotation;
 use Pluf\Workflow\Attributes\State;
 use Pluf\Workflow\Attributes\States;
 use ReflectionClass;
@@ -35,7 +35,7 @@ class ApiTest extends TestCase
      */
     public function instanceStatesAttributes()
     {
-        $reflector = new ReflectionClass(BookStates::class);
+        $reflector = new ReflectionClass(ATMStateMachineAnotation::class);
         $this->assertNotNull($reflector);
 
         $attributes = $reflector->getAttributes(State::class);

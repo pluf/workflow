@@ -5,9 +5,17 @@ use Pluf\Workflow\Condition;
 
 class XorCondition implements Condition
 {
-    public function __construct(
-        public Condition $a, 
-        public Condition $b){ }
+
+    public Condition $a;
+
+    public Condition $b;
+
+    public function __construct(Condition $a, Condition $b)
+    {
+        $this->a = $a;
+        $this->b = $b;
+    }
+
     public function name(): string
     {
         return 'Xor';
@@ -17,6 +25,5 @@ class XorCondition implements Condition
     {
         return $this->a->isSatisfied($context) ^ $this->b->isSatisfied($context);
     }
-
 }
 
