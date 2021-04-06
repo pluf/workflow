@@ -26,5 +26,12 @@ trait AssertTrait
             throw new RuntimeException($message);
         }
     }
+    
+    public function assertFalse($value, $message = "Value must be false", array $params = [])
+    {
+        if ($value) {
+            throw new RuntimeException($message);
+        }
+    }
 }
 

@@ -1,12 +1,10 @@
 <?php
 namespace Pluf\Workflow\Attributes;
+
 use Attribute;
 
-#[Attribute]
+# [Attribute]
 class ContextInsensitive
 {
 }
 
-// @Retention(RUNTIME)
-// @Target({TYPE})
-// @Documented

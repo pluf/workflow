@@ -698,7 +698,7 @@ class StateImpl implements MutableState
      */
     public function setHistoryType(string $historyType): void
     {
-        $this->historyType = historyType;
+        $this->historyType = $historyType;
     }
 
     /**

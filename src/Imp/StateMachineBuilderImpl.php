@@ -4,12 +4,14 @@ namespace Pluf\Workflow\Imp;
 use Pluf\Di\Container;
 use Pluf\Workflow\Action;
 use Pluf\Workflow\ActionExecutionService;
+use Pluf\Workflow\Conditions;
 use Pluf\Workflow\HistoryType;
 use Pluf\Workflow\MutableState;
 use Pluf\Workflow\MutableTransition;
 use Pluf\Workflow\StateMachine;
 use Pluf\Workflow\StateMachineBuilder;
 use Pluf\Workflow\StateMachineConfiguration;
+use Pluf\Workflow\TransitionType;
 use Pluf\Workflow\UntypedStateMachineBuilder;
 use Pluf\Workflow\Actions\FinalStateGuardAction;
 use Pluf\Workflow\Attributes\State;
@@ -25,6 +27,9 @@ use Pluf\Workflow\Exceptions\IllegalArgumentException;
 use Pluf\Workflow\Exceptions\IllegalStateException;
 use ArrayObject;
 use ReflectionClass;
+use Throwable;
+use Pluf\Workflow\Conditions\Always;
+use Pluf\Workflow\Conditions\Never;
 
 class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachineBuilder
 {
@@ -180,7 +185,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
     private function buildDeclareState(State $state): void
     {
         // Preconditions.checkState(stateConverter!=null, "Do not register state converter");
-        $stateId = $this->stateConverter->convertFromString($state->name);
+        $stateId = $state->name;
         // Preconditions.checkNotNull(stateId, "Cannot convert state of name \""+state.name()+"\".");
         $newState = $this->defineState($stateId);
         $newState->setCompositeType($state->compositeType);
@@ -190,7 +195,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         $newState->setFinal($state->finalState);
 
         if (! empty($state->parent)) {
-            $parentStateId = $this->stateConverter->convertFromString($this->parseStateId($state->parent));
+            $parentStateId = $this->parseStateId($state->parent);
             $parentState = $this->defineState($parentStateId);
             $newState->setParentState($parentState);
             $parentState->addChildState($newState);
@@ -200,7 +205,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         }
 
         if (! empty($state->entryCallMethod)) {
-            $methodCallAction = FSM::newMethodCallActionProxy($state->entryCallMethod, $this->executionContext);
+            $methodCallAction = FSM::newMethodCallAction($state->entryCallMethod);
             $this->onEntry($stateId)->perform($methodCallAction);
         }
 
@@ -209,6 +214,125 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
             $this->onExit($stateId)->perform($methodCallAction);
         }
         $this->rememberStateAlias($state);
+    }
+
+    private function buildDeclareTransition(Transit $transit): void
+    {
+        if (empty($transit)) {
+            return;
+        }
+
+        // TODO: support sate converters
+        // Preconditions.checkState(stateConverter!=null, "Do not register state converter");
+        // Preconditions.checkState(eventConverter!=null, "Do not register event converter");
+
+        // if not explicit specify 'from', 'to' and 'event', it is declaring a defer bound action.
+        if ($this->isDeferBoundAction($transit)) {
+            $this->buildDeferBoundAction($transit);
+            return;
+        }
+        
+        $when = $transit->getWhen();
+        $this->assertTrue($this->isInstantiableType($when), "Condition \'when\' should be concrete class or static inner class.");
+        $this->assertTrue($transit->type != TransitionType::INTERNAL || $transit->from == $transit->to, "Internal transition must transit to the same source state.");
+
+        // $fromState = stateConverter.convertFromString(parseStateId(transit.from()));
+        $fromState = $this->parseStateId($transit->from);
+        $this->assertNotEmpty($fromState, "Source state not found.");
+        // $toState = stateConverter.convertFromString(parseStateId(transit.to()));
+        $toState = $this->parseStateId($transit->to);
+        // $event = eventConverter.convertFromString(transit.on());
+        $event = $transit->on;
+        $this->assertNotEmpty($event, "Event not found.");
+
+        // check exited transition which satisfied the criteria
+        if ($this->states->offsetExists($fromState)) {
+            $theFromState = $this->states[$fromState];
+            foreach ($theFromState->getAllTransitions() as $t) {
+                if ($t->isMatch($fromState, $toState, $event, $transit->priority, $when, $transit->type)) {
+                    $mutableTransition = $t;
+                    $callMethodExpression = $transit->callMethod;
+                    if (! empty($callMethodExpression)) {
+                        $methodCallAction = FSM::newMethodCallAction($callMethodExpression);
+                        $mutableTransition->addAction($methodCallAction);
+                    }
+                    return;
+                }
+            }
+        }
+
+        // if no existed transition is matched then create a new transition
+        $toBuilder = null;
+        if ($transit->type == TransitionType::INTERNAL) {
+            $transitionBuilder = FSM::newInternalTransitionBuilder($this->states, $transit->priority);
+            $toBuilder = $transitionBuilder->within($fromState);
+        } else {
+            $transitionBuilder = ($transit->type == TransitionType::LOCAL) ? FSM::newLocalTransitionBuilder($this->states, $transit->priority) : FSM::newExternalTransitionBuilder($this->states, $transit->priority);
+            $fromBuilder = $transitionBuilder->from($fromState);
+            $isTargetFinal = $transit->targetFinal || FSM::getState($this->states, $toState)->isFinalState();
+            $toBuilder = $isTargetFinal ? $fromBuilder->toFinal($toState) : $fromBuilder->to($toState);
+        }
+        $onBuilder = $toBuilder->on($event);
+        $c = null;
+        try {
+            if ($transit->when != 'Always') {
+                $constructor = $when;
+                // TODO: maso, 2021: use invoker to instance
+                $c = new $constructor();
+            } else if (! empty($transit->whenMvel)) {
+                $c = FSM::newMvelCondition($transit->whenMvel);
+            }
+        } catch (Throwable $e) {
+            // logger.error("Instantiate Condition \""+transit.when().getName()+"\" failed.");
+            $c = Conditions::never();
+        }
+        $whenBuilder = $c != null ? $onBuilder->when($c) : $onBuilder;
+
+        if (! empty($transit->callMethod)) {
+            $methodCallAction = FSM::newMethodCallActionProxy($transit->callMethod);
+            $whenBuilder->perform($methodCallAction);
+        }
+    }
+
+    /**
+     * Checks if many source, distance or event must support
+     *
+     * @param Transit $transit
+     * @return bool
+     */
+    private function isDeferBoundAction(Transit $transit): bool
+    {
+        return "*" == $transit->from || "*" == $transit->to || "*" == $transit->on;
+    }
+
+    /**
+     * add alias
+     *
+     * @param State $state
+     */
+    private function rememberStateAlias(State $state): void
+    {
+        if (empty($state->alias)) {
+            return;
+        }
+        $this->assertFalse(array_key_exists($state->alias, $this->stateAliasToDescription), "Cannot define duplicate state alias \"{state.alias}\" for state \"{state.name}\" and \"{other}\".", [
+            'state' => $state,
+            'other' => $this->stateAliasToDescription[$state->alias]
+        ]);
+        $this->stateAliasToDescription[$state->alias] = $state->name;
+    }
+
+    /**
+     * Convert alias or name into state name
+     *
+     * State alias starts with #
+     *
+     * @param string $value
+     * @return string
+     */
+    private function parseStateId(string $value): string
+    {
+        return (isset($value) && str_starts_with($value, "#")) ? $this->stateAliasToDescription[substr($value, 1)] : $value;
     }
 
     private function installDeferBoundActions(): void
@@ -474,7 +598,9 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
      * @see \Pluf\Workflow\UntypedStateMachineBuilder::newAnyStateMachine()
      */
     public function newAnyStateMachine($initialStateId, StateMachineConfiguration $configuration, ...$extraParams)
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
     /**
      *
@@ -487,35 +613,108 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         return FSM::newExternalTransitionBuilder($this->states, $priority);
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineTerminateEvent()
+     */
     public function defineTerminateEvent($terminateEvent): void
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineStartEvent()
+     */
     public function defineStartEvent($startEvent): void
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::onExit()
+     */
     public function onExit($stateId): EntryExitActionBuilder
-    {}
+    {
+        $this->checkState();
+        $state = FSM::getState($this->states, $stateId);
+        return FSM::newEntryExitActionBuilder($state, false);
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::externalTransitions()
+     */
     public function externalTransitions(int $priority = 0): MultiTransitionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineLinkedState()
+     */
     public function defineLinkedState($stateId, $linkedStateMachineBuilder, $initialLinkedState, $extraParams): MutableState
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineState()
+     */
     public function defineState($stateId): MutableState
-    {}
+    {
+        $this->checkState();
+        return FSM::getState($this->states, $stateId);
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::transitions()
+     */
     public function transitions(int $priority = 0): MultiTransitionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineFinishEvent()
+     */
     public function defineFinishEvent($finishEvent): void
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::transition()
+     */
     public function transition(int $priority = 0): ExternalTransitionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineSequentialStatesOn()
+     */
     public function defineSequentialStatesOn($parentStateId, $childStateIds, ?HistoryType $historyType = null): void
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
     /**
      *
@@ -543,35 +742,108 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         return $this->stateMachineConfiguration;
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\UntypedStateMachineBuilder::newUntypedStateMachine()
+     */
     public function newUntypedStateMachine($initialStateId, StateMachineConfiguration $configuration, ...$extraParams)
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::transit()
+     */
     public function transit(): DeferBoundActionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineTimedState()
+     */
     public function defineTimedState($stateId, int $initialDelay, int $timeInterval, $autoEvent, $autoContext): MutableState
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::localTransitions()
+     */
     public function localTransitions(int $priority = 0): MultiTransitionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::internalTransition()
+     */
     public function internalTransition(int $priority = 0): InternalTransitionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineFinalState()
+     */
     public function defineFinalState($stateId): MutableState
-    {}
+    {
+        $this->checkState();
+        $newState = $this->defineState($stateId);
+        $newState->setFinal(true);
+        return $newState;
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineParallelStatesOn()
+     */
     public function defineParallelStatesOn($parentStateId, $childStateIds): void
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::onEntry()
+     */
     public function onEntry($stateId): EntryExitActionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::defineNoInitSequentialStatesOn()
+     */
     public function defineNoInitSequentialStatesOn($parentStateId, $childStateIds, ?HistoryType $historyType = null): void
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachineBuilder::localTransition()
+     */
     public function localTransition(int $priority = 0): LocalTransitionBuilder
-    {}
+    {
+        throw new \RuntimeException('Not implements');
+    }
 
     private function postConstructStateMachine(AbstractStateMachine $stateMachine): void
     {

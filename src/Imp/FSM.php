@@ -42,6 +42,7 @@ class FSM
     // return SquirrelProvider.getInstance().newInstance(new TypeReference<TimedStateImpl<T, S, E, C>>() {},
     // new Class[] { Object.class }, new Object[] { stateId });
     // }
+    
     public static function getState(ArrayObject $states, $stateId): MutableState
     {
         if ($states->offsetExists($stateId)) {
@@ -82,13 +83,12 @@ class FSM
         return new TransitionBuilderImpl($states, TransitionType::INTERNAL, $priority);
     }
 
-    // static <T extends StateMachine<T, S, E, C>, S, E, C> EntryExitActionBuilder<T, S, E, C> newEntryExitActionBuilder(
-    // MutableState<T, S, E, C> state, boolean isEntryAction, ExecutionContext executionContext) {
-    // return SquirrelProvider.getInstance().newInstance(new TypeReference<EntryExitActionBuilderImpl<T, S, E, C>>() {},
-    // new Class[] { MutableState.class, boolean.class, ExecutionContext.class},
-    // new Object[] { state, isEntryAction, executionContext});
-    // }
-    static function newMethodCallAction(string $method, int $weight): MethodCallActionImpl
+    public static function newEntryExitActionBuilder($state, bool $isEntryAction)
+    {
+        return new EntryExitActionBuilderImpl($state, $isEntryAction);
+    }
+
+    public static function newMethodCallAction(string $method, int $weight = 1): MethodCallActionImpl
     {
         return new MethodCallActionImpl($method, $weight);
     }
