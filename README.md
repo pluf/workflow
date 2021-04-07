@@ -20,3 +20,35 @@ The most important guidelines are described as follows:
 Fork the project, create a feature branch, and send us a pull request.
 
 To ensure a consistent code base, you should make sure the code follows the PSR-2 Coding Standards.
+
+
+
+https://github.com/hekailiang/squirrel
+
+
+
+## What is it?
+
+Workflow is aimed to provide a **lightweight**, highly **flexible** and **extensible**, **diagnosable**, **easy use** and **type safe** PHP 8 state machine implementation for enterprise usage.
+
+Here is the state machine diagram which describes the state change of an ATM:
+
+![ATMStateMachine](http://hekailiang.github.io/squirrel/images/ATMStateMachine.png)
+
+The sample code could be found in folder *"tests\ATMStateMachine.php"*.
+
+## Composer
+
+Pluf Workflow has been deployed to pakcagest (php composer repository) repository, so you only need to add following  dependency to the composer.json.
+
+
+```json
+"pluf\workflow": "7.x"
+```
+
+
+
+
+
+
+

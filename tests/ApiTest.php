@@ -1,65 +1,26 @@
 <?php
-namespace Pluf\Test\Workflow;
+namespace Pluf\Tests;
 
-use Pluf\Test\TestCase;
-use Pluf\Workflow\Event;
-use Pluf\Workflow\Machine;
-use Pluf;
+use PHPUnit\Framework\TestCase;
+use Pluf\Tests\Atm\ATMStateMachineAnotation;
+use Pluf\Workflow\Attributes\State;
+use ReflectionClass;
 
 class ApiTest extends TestCase
 {
 
     /**
-     *
-     * @beforeClass
-     */
-    public static function setPlfu()
-    {
-        Pluf::start(__DIR__ . '/conf/config.php');
-        $GLOBALS['_PX_request'] = array();
-    }
-
-    /**
-     * Can create new instance
+     * To load states from attributes
      *
      * @test
      */
-    public function instance()
+    public function instanceStatesAttributes()
     {
-        // Machine
-        $wm = new Machine();
-        $this->assertTrue(isset($wm));
-        // Event
-        $request = null;
-        $object = null;
-        $action = null;
-        $state = null;
-        $transaction = null;
-        $event = new Event($request, $object, $action, $state, $transaction);
-        $this->assertTrue(isset($event));
-    }
+        $reflector = new ReflectionClass(ATMStateMachineAnotation::class);
+        $this->assertNotNull($reflector);
 
-    /**
-     * Check class api
-     *
-     * @test
-     */
-    public function methods()
-    {
-        $object = new Machine();
-        $method_names = array(
-            'transact',
-
-            'setStates',
-            'setSignals',
-            'setInitialState',
-            'setProperty',
-
-            'apply',
-            'can'
-        );
-        foreach ($method_names as $method_name) {
-            $this->assertTrue(method_exists($object, $method_name));
-        }
+        $attributes = $reflector->getAttributes(State::class);
+        $this->assertIsArray($attributes);
+        $this->assertNotEmpty($attributes);
     }
 }
