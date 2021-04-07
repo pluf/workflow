@@ -25,7 +25,7 @@ use Throwable;
  * @author maso
  *        
  */
-class AbstractExecutionService implements ActionExecutionService
+class ExecutionServiceImpl implements ActionExecutionService
 {
 
     use AssertTrait;
@@ -146,10 +146,10 @@ class AbstractExecutionService implements ActionExecutionService
         $this->doExecute($bucketName, $actionContexts);
     }
 
-    private function run(ActionContext $context, Container $container): Container
+    private function run(ActionContext $context, Container $containerOrigin): Container
     {
         // init container to isolate for each action
-        $container = new Container($container);
+        $container = new Container($containerOrigin);
         $container['from'] = Container::value($context->from);
         $container['to'] = Container::value($context->to);
         $container['event'] = Container::value($context->event);
@@ -157,6 +157,14 @@ class AbstractExecutionService implements ActionExecutionService
         $container['stateMachine'] = Container::value($context->stateMachine);
         $container['position'] = Container::value($context->position);
         $container['stateMachineImplementation'] = Container::value($context->stateMachine->getImplementation());
+        
+        if(is_array($context->context)){
+            foreach ($context->context as $key=>$value){
+                if(!UtilImpl::isReservedKey($key)) {
+                    $container[$key] = Container::value($value);
+                }
+            }
+        }
 
         // invoke the action
         $invoker = new Invoker(new ResolverChain([

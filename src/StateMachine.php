@@ -29,7 +29,7 @@ interface StateMachine
      * @param
      *            testEvent if the event is for test
      */
-    function fireEvent($event, $context = null, bool $testEvent = false): void;
+    function fireEvent($event, $context = null, bool $testEvent = false): self;
 
     /**
      * Fires event with context immediately, if current state machine is busy, the next processing event
@@ -40,7 +40,7 @@ interface StateMachine
      * @param
      *            context external context
      */
-    function fireImmediate($event, $context): void;
+    function fireImmediate($event, $context): self;
 
     /**
      * Test transition result under circumstance
@@ -67,7 +67,7 @@ interface StateMachine
      * @param
      *            context external context
      */
-    function start($context): void;
+    function start($context): self;
 
     /**
      * Terminate state machine under external context

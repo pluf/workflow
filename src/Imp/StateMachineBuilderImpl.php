@@ -289,7 +289,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         $whenBuilder = $c != null ? $onBuilder->when($c) : $onBuilder;
 
         if (! empty($transit->callMethod)) {
-            $methodCallAction = FSM::newMethodCallActionProxy($transit->callMethod);
+            $methodCallAction = FSM::newMethodCallAction($transit->callMethod);
             $whenBuilder->perform($methodCallAction);
         }
     }
@@ -580,7 +580,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
 
     private function isStateMachineType(string $stateMachineClazz): bool
     {
-        return is_subclass_of($stateMachineClazz, AbstractStateMachine::class, true);
+        return is_subclass_of($stateMachineClazz, StateMachineImpl::class, true);
         // stateMachineClazz!= null && AbstractStateMachine.class != stateMachineClazz &&
         // AbstractStateMachine.class.isAssignableFrom(stateMachineClazz);
     }
@@ -845,7 +845,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         throw new \RuntimeException('Not implements');
     }
 
-    private function postConstructStateMachine(AbstractStateMachine $stateMachine): void
+    private function postConstructStateMachine(StateMachineImpl $stateMachine): void
     {
         if (isset($this->postConstructMethod)) {
             // TODO: invokde the post constractur
@@ -908,7 +908,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
     {
         if (! isset($this->actionExecutionService)) {
             $container = $this->getContainer();
-            $this->actionExecutionService = new AbstractExecutionService($container);
+            $this->actionExecutionService = new ExecutionServiceImpl($container);
         }
         return $this->actionExecutionService;
     }
@@ -929,7 +929,7 @@ class StateMachineBuilderImpl implements UntypedStateMachineBuilder, StateMachin
         $actionExecutionService = $this->getActionExecutionService();
 
         // Just internal implementaion allowed
-        $stateMachine = new AbstractStateMachine($initialStateId, $this->states, $configuration);
+        $stateMachine = new StateMachineImpl($initialStateId, $this->states, $configuration);
         $stateMachine->setStartEvent($this->startEvent)
             ->setFinishEvent($this->finishEvent)
             ->setTerminateEvent($this->terminateEvent)

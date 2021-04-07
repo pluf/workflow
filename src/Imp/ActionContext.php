@@ -29,7 +29,7 @@ class ActionContext
 
     public $context;
 
-    public AbstractStateMachine $stateMachine;
+    public StateMachineImpl $stateMachine;
 
     public int $position;
 

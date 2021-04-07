@@ -40,7 +40,7 @@ use Throwable;
  * and <b>on[EventName]</b>.</li>
  * </ol>
  */
-class AbstractStateMachine implements StateMachine
+class StateMachineImpl implements StateMachine
 {
     use AssertTrait;
     use EventHandlerTrait;
@@ -107,7 +107,7 @@ class AbstractStateMachine implements StateMachine
         $this->queuedTestEvents = new QueuedEvents();
     }
 
-    private function processEvent($event, $context, StateMachineData $originalData, AbstractExecutionService $executionService, bool $DataIsolateEnabled): bool
+    private function processEvent($event, $context, StateMachineData $originalData, ExecutionServiceImpl $executionService, bool $DataIsolateEnabled): bool
     {
         $localData = $originalData;
         $fromState = $localData->read()->getCurrentRawState();
@@ -235,7 +235,7 @@ class AbstractStateMachine implements StateMachine
         $this->queuedEvents->clear();
     }
 
-    public function fireEvent($event, $context = null, bool $insertAtFirst = false): void
+    public function fireEvent($event, $context = null, bool $insertAtFirst = false): self
     {
         $isEntryPoint = $this->isEntryPoint();
         if ($isEntryPoint) {
@@ -243,7 +243,7 @@ class AbstractStateMachine implements StateMachine
         } else if ($this->delegatorModeEnabled && StateMachineContext::currentInstance() != $this) {
             $currentInstance = StateMachineContext::currentInstance();
             $currentInstance->fire($event, $context);
-            return;
+            return $this;
         }
         try {
             if (StateMachineContext::isTestEvent()) {
@@ -256,6 +256,7 @@ class AbstractStateMachine implements StateMachine
                 StateMachineContext::set(null);
             }
         }
+        return $this;
     }
 
     /**
@@ -269,11 +270,21 @@ class AbstractStateMachine implements StateMachine
         $this->fireEvent($event, $context);
     }
 
-    public function fireImmediate($event, $context): void
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::fireImmediate()
+     */
+    public function fireImmediate($event, $context): self
     {
-        $this->fireEvent($event, $context, true);
+        return $this->fireEvent($event, $context, true);
     }
 
+    /**
+     *
+     * {@inheritdoc}
+     * @see \Pluf\Workflow\StateMachine::isRemoteMonitorEnabled()
+     */
     public function isRemoteMonitorEnabled(): bool
     {
         return $this->remoteMonitorEnabled;
@@ -551,16 +562,15 @@ class AbstractStateMachine implements StateMachine
      * {@inheritdoc}
      * @see \Pluf\Workflow\StateMachine::start()
      */
-    public function start($context = null): void
+    public function start($context = null): self
     {
-        if ($this->isStarted()) {
-            return;
+        if (! $this->isStarted()) {
+            $this->setStatus('BUSY');
+            $this->internalStart($context, $this->data, $this->executor);
+            $this->setStatus('IDLE');
+            $this->processEvents();
         }
-
-        $this->setStatus('BUSY');
-        $this->internalStart($context, $this->data, $this->executor);
-        $this->setStatus('IDLE');
-        $this->processEvents();
+        return $this;
     }
 
     private function internalStart($context, StateMachineData $localData, ActionExecutionService $executionService)
