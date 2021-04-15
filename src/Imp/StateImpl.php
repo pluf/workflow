@@ -733,8 +733,7 @@ class StateImpl implements MutableState
 
     public function __toString()
     {
-        // use enum name value instead of toString result
-        return AbstractVisitor::getName($this->getStateId());
+        return '' . $this->stateId;
     }
 
     /**
