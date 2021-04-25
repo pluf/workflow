@@ -1,5 +1,5 @@
 <?php
-namespace Pluf\Workflow\Imp;
+namespace Pluf\Workflow\IO;
 
 class AbstractVisitor
 {

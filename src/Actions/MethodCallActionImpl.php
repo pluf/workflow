@@ -93,7 +93,7 @@ class MethodCallActionImpl extends AbstractAction
 
     public function __toString(): string
     {
-        return "method#" . $this->method . ":" . weight;
+        return "method#" . $this->method . ":" . $this->weight;
     }
 }
 

@@ -42,7 +42,10 @@ class StateContextImpl implements StateContext
      * @param TransitionResult $result
      * @param ActionExecutionService $executor
      */
-    public function __construct(StateMachine $stateMachine, StateMachineData $stateMachineData, ?ImmutableState $sourceState, $event, $context = null, ?TransitionResult $transitionResult, ActionExecutionService $actionExecutionService)
+    public function __construct(StateMachine $stateMachine, StateMachineData $stateMachineData, ?ImmutableState $sourceState, $event, 
+        $context = null, 
+        ?TransitionResult $transitionResult= null, 
+        ?ActionExecutionService $actionExecutionService = null)
     {
         $this->stateMachine = $stateMachine;
         $this->stateMachineData = $stateMachineData;
