@@ -416,11 +416,10 @@ class StateMachineImpl implements StateMachine
 
     private function resolveRawState(ImmutableState $rawState): ImmutableState
     {
-        $resolvedRawState = $rawState;
-        if ($resolvedRawState instanceof ImmutableLinkedState) {
-            $resolvedRawState = $rawState->getLinkedStateMachine($this)->getCurrentRawState();
+        if ($rawState instanceof ImmutableLinkedState) {
+            return $rawState->getLinkedStateMachine($this)->getCurrentRawState();
         }
-        return $resolvedRawState;
+        return $rawState;
     }
 
     /**

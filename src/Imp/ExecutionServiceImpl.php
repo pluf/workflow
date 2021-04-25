@@ -128,7 +128,7 @@ class ExecutionServiceImpl implements ActionExecutionService
                     }
                     $container = $this->run($actionContext, $container);
                 } catch (Throwable $e) {
-                    $te = new TransitionException('Fail to execute the action', ErrorCodes::FSM_TRANSITION_ERROR, $e, $actionContext->from, $actionContext->to, $actionContext->event, $actionContext->context, $actionContext->action->name);
+                    $te = new TransitionException('Fail to execute the action: '.$e->getMessage(), ErrorCodes::FSM_TRANSITION_ERROR, $e, $actionContext->from, $actionContext->to, $actionContext->event, $actionContext->context, $actionContext->action->name);
                     $this->fire('error', ExecActionExceptionEventImpl::get($te, $i + 1, $actionSize, $actionContext));
                     throw $te;
                 } finally {
