@@ -359,7 +359,7 @@ class StateMachineImpl implements StateMachine
                 return false;
             }
         }
-        return $testRawState->getAcceptableEvents()->contains($event);
+        return array_key_exists($event, $testRawState->getAcceptableEvents());
     }
 
     /**
@@ -430,7 +430,7 @@ class StateMachineImpl implements StateMachine
      */
     public function getCurrentRawState(): ImmutableState
     {
-        $rawState = $this->data->read()->currentRawState();
+        $rawState = $this->data->read()->getCurrentRawState();
         return $this->resolveRawState($rawState);
     }
 
@@ -441,7 +441,7 @@ class StateMachineImpl implements StateMachine
      */
     public function getLastRawState(): ImmutableState
     {
-        $lastRawState = $this->data->read()->lastRawState();
+        $lastRawState = $this->data->read()->getLastRawState();
         return $this->resolveRawState($lastRawState);
     }
 
@@ -462,7 +462,7 @@ class StateMachineImpl implements StateMachine
      */
     public function getRawStateFrom($stateId): ImmutableState
     {
-        return $this->data->read()->rawStateFrom($stateId);
+        return $this->data->read()->getRawStateFrom($stateId);
     }
 
     /**
@@ -472,7 +472,7 @@ class StateMachineImpl implements StateMachine
      */
     public function getAllRawStates(): array
     {
-        return $this->data->read()->rawStates();
+        return $this->data->read()->getRawStates();
     }
 
     /**
@@ -482,7 +482,7 @@ class StateMachineImpl implements StateMachine
      */
     public function getAllStates(): array
     {
-        return $this->data->read()->states();
+        return $this->data->read()->getStates();
     }
 
     /**
@@ -521,7 +521,7 @@ class StateMachineImpl implements StateMachine
     public function getLastState()
     {
         return $this->resolveState($this->data->read()
-            ->lastState(), $this->data);
+            ->getLastState(), $this->data);
     }
 
     /**
@@ -531,7 +531,7 @@ class StateMachineImpl implements StateMachine
      */
     public function getInitialState()
     {
-        return $this->data->read()->initialState();
+        return $this->data->read()->getInitialState();
     }
 
     /**

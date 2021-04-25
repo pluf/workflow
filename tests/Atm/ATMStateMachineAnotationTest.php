@@ -64,5 +64,15 @@ class ATMStateMachineAnotationTest extends TestCase
         $this->assertEquals("exitDisconnected.transitFromDisconnectedToInServiceOnConnectionRestored.entryInService.", $imple->consumeLog());
         $this->assertEquals('InService', $this->stateMachine->getCurrentState());
     }
+
+    /**
+     *
+     * @test
+     */
+    public function testUndefinedEvent()
+    {
+        $this->stateMachine->start();
+        $this->assertFalse($this->stateMachine->canAccept("xxx"));
+    }
 }
 

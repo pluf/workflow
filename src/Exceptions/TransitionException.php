@@ -32,7 +32,7 @@ class TransitionException extends RuntimeException
      * @param mixed $previous
      *            [optional]
      */
-    public function __construct($message = null, $code = null, $previous = null, $from, $to, $event, $context, $actionName)
+    public function __construct($message = null, $code = null, $previous = null, $from = null, $to = null, $event = null, $context = null, $actionName = null)
     {
         parent::__construct($message, $code, $previous);
         $this->from = $from;
