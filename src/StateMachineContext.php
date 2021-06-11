@@ -1,8 +1,6 @@
 <?php
 namespace Pluf\Workflow;
 
-use function PHPUnit\Framework\isEmpty;
-
 /**
  * This is a stack of statemachin to execute hericicaly
  *
@@ -51,7 +49,7 @@ class StateMachineContext
     public static function isTestEvent(): bool
     {
         // return contextContainer.get().size()>0 ? contextContainer.get().peek().isTestEvent : false;
-        if (isEmpty(self::$stack)) {
+        if (empty(self::$stack)) {
             return false;
         }
         $instance = end(self::$stack);
