@@ -20,7 +20,7 @@ class StateMachineContext
 
     /**
      * Creates a new instance
-     * 
+     *
      * @param StateMachine $stateMachine
      * @param bool $testEvent
      */
@@ -37,7 +37,7 @@ class StateMachineContext
             array_pop(self::$stack);
         } else {
             // contextContainer.get().push(new StateMachineContext(instance, isTestEvent));
-            array_push(self::$stack, $testEvent);
+            array_push(self::$stack, new StateMachineContext($instance, $testEvent));
         }
     }
 
@@ -49,10 +49,10 @@ class StateMachineContext
     public static function isTestEvent(): bool
     {
         // return contextContainer.get().size()>0 ? contextContainer.get().peek().isTestEvent : false;
-        if (empty(self::$stack)) {
+        $instance = end(self::$stack);
+        if (!$instance) {
             return false;
         }
-        $instance = end(self::$stack);
         return $instance->testEvent;
     }
 }
